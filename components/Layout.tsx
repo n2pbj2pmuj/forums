@@ -7,6 +7,33 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+interface NavLinkProps {
+  to: string;
+  children: React.ReactNode;
+  active: boolean;
+}
+
+// Fixed: Moved NavLink definition above Layout to ensure it is defined before usage in JSX,
+// avoiding type-checking issues where children were not recognized correctly.
+const NavLink: React.FC<NavLinkProps> = ({ to, children, active }) => {
+  const { theme } = useAppState();
+  const isDark = theme === 'dark';
+
+  return (
+    <Link 
+      to={to} 
+      className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-1 ${
+        active 
+          ? (isDark ? 'text-rojo-500' : 'text-rojo-600') 
+          : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-900')
+      }`}
+    >
+      {children}
+      {active && <span className={`absolute -bottom-1 left-0 w-full h-0.5 rounded-full ${isDark ? 'bg-rojo-500 shadow-[0_0_10px_rgba(255,0,0,1)]' : 'bg-rojo-600'}`}></span>}
+    </Link>
+  );
+};
+
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -132,25 +159,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </aside>
       </div>
     </div>
-  );
-};
-
-const NavLink = ({ to, children, active }: { to: string; children: React.ReactNode; active: boolean }) => {
-  const { theme } = useAppState();
-  const isDark = theme === 'dark';
-
-  return (
-    <Link 
-      to={to} 
-      className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-1 ${
-        active 
-          ? (isDark ? 'text-rojo-500' : 'text-rojo-600') 
-          : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-900')
-      }`}
-    >
-      {children}
-      {active && <span className={`absolute -bottom-1 left-0 w-full h-0.5 rounded-full ${isDark ? 'bg-rojo-500 shadow-[0_0_10px_rgba(255,0,0,1)]' : 'bg-rojo-600'}`}></span>}
-    </Link>
   );
 };
 

@@ -15,17 +15,21 @@ const SignupPage: React.FC = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
     setError('');
     setSuccess(false);
     setLoading(true);
+    
     try {
-      await signup(username, email, pass);
+      // Logic: Calls context signup which now includes Supabase metadata options
+      await signup(username.trim(), email.trim(), pass);
       setSuccess(true);
       setUsername('');
       setEmail('');
       setPass('');
     } catch (err: any) {
-      setError(err.message || 'Registration failed.');
+      setError(err.message || 'Registration failed. The Grid may be offline.');
     } finally {
       setLoading(false);
     }
@@ -62,6 +66,7 @@ const SignupPage: React.FC = () => {
                 onChange={e => setUsername(e.target.value)}
                 className="w-full bg-rojo-950 border border-rojo-900/30 rounded-2xl px-5 py-3 text-white focus:ring-2 ring-rojo-500 outline-none transition-all placeholder-slate-700"
                 placeholder="Grid handle..."
+                disabled={loading}
               />
             </div>
             <div>
@@ -73,6 +78,7 @@ const SignupPage: React.FC = () => {
                 onChange={e => setEmail(e.target.value)}
                 className="w-full bg-rojo-950 border border-rojo-900/30 rounded-2xl px-5 py-3 text-white focus:ring-2 ring-rojo-500 outline-none transition-all placeholder-slate-700"
                 placeholder="identity@rojos.games"
+                disabled={loading}
               />
             </div>
             <div>
@@ -84,6 +90,7 @@ const SignupPage: React.FC = () => {
                 onChange={e => setPass(e.target.value)}
                 className="w-full bg-rojo-950 border border-rojo-900/30 rounded-2xl px-5 py-3 text-white focus:ring-2 ring-rojo-500 outline-none transition-all placeholder-slate-700"
                 placeholder="••••••••"
+                disabled={loading}
               />
             </div>
 

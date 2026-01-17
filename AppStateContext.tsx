@@ -84,7 +84,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       if (error || !data) {
         console.warn("User record missing in 'profiles' table. Generating defensive fallback identity.");
-        // We set a fallback user immediately so the UI has valid data to render
         const fallback = mapUser({ id: uid });
         setCurrentUser(fallback);
         return fallback;
@@ -166,7 +165,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          // fetchProfile always sets a valid user object or fallback
           await fetchProfile(session.user.id);
           setIsAuthenticated(true);
         }
@@ -200,18 +198,28 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (error) throw error;
     
     if (data.session) {
-      // Ensure profile is established BEFORE navigating or allowing access
       await fetchProfile(data.user.id);
       setIsAuthenticated(true);
     }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password: pass });
+    const { data, error } = await supabase.auth.signUp({ 
+      email: email, 
+      password: pass,
+      options: {
+        data: {
+          username: username // Critical part: Pass to raw_user_meta_data for triggers
+        }
+      }
+    });
+
     if (error) throw error;
+
     if (data.user) {
-      // Initial profile creation
-      await supabase.from('profiles').insert({
+      // Manual upsert in case the database trigger hasn't fired yet
+      // This prevents "Identity not found" issues on the very first redirect
+      await supabase.from('profiles').upsert({
         id: data.user.id,
         username,
         display_name: username,
