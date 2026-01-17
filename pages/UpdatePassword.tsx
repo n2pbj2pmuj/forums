@@ -18,7 +18,7 @@ const UpdatePasswordPage: React.FC = () => {
       await updatePassword(pass);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Password update failed. The reset link may have expired.');
+      setError(err.message || 'Modification failed. Authentication link might be expired.');
     } finally {
       setLoading(false);
     }
@@ -28,14 +28,14 @@ const UpdatePasswordPage: React.FC = () => {
     <div className="min-h-screen bg-rojo-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-black border border-rojo-900/50 rounded-3xl p-10 shadow-[0_0_50px_rgba(255,0,0,0.1)]">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-black text-rojo-500 neon-red tracking-tighter mb-2 uppercase leading-none">New Password</h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">Set your new security credentials</p>
+          <h1 className="text-3xl font-black text-rojo-500 neon-red tracking-tighter mb-2 uppercase leading-none">NEW KEY</h1>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">Redefine Security Protocol</p>
         </div>
 
         <form onSubmit={handleUpdate} className="space-y-8">
           {error && <div className="p-4 bg-rojo-600/20 border border-rojo-500 text-rojo-500 text-xs font-bold rounded-xl leading-relaxed">{error}</div>}
           <div>
-            <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest">New Secret Password</label>
+            <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest">New Secret Passphrase</label>
             <input 
               required
               type="password" 
@@ -49,7 +49,7 @@ const UpdatePasswordPage: React.FC = () => {
             disabled={loading}
             className="w-full bg-rojo-600 hover:bg-rojo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all uppercase text-sm tracking-widest disabled:opacity-50"
           >
-            {loading ? 'Processing...' : 'Save New Password'}
+            {loading ? 'Processing...' : 'Commit New Protocol'}
           </button>
         </form>
       </div>

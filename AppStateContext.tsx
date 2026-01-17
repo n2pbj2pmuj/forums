@@ -77,6 +77,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (error || !data) {
+        console.warn("[Profile] Fetch missing, using fallback profile.");
         const fallback = mapUser({ id: uid, email: email, username: email?.split('@')[0] });
         setCurrentUser(fallback);
         return fallback;
@@ -85,7 +86,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentUser(mapped);
       return mapped;
     } catch (err) {
-      console.error("[Profile] Fetch failed:", err);
+      console.error("[Profile] Critical fetch failure:", err);
       const fallback = mapUser({ id: uid, email });
       setCurrentUser(fallback);
       return fallback;
@@ -136,66 +137,68 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         reason: x.reason,
         contentSnippet: x.content_snippet,
         status: x.status as ModStatus,
-        createdAt: x.createdAt
+        createdAt: x.created_at
       })));
     } catch (err) {
-      console.error("[Sync] Background refresh failed:", err);
+      console.error("[Sync] Background sync failed:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
     
-    // Safety timeout: If everything hangs, clear the loading screen after 5 seconds
-    const safetyTimer = setTimeout(() => {
-      if (mounted) setLoading(false);
-    }, 5000);
+    // SAFETY OVERRIDE: Clear loading after 2.5 seconds regardless of DB state
+    const safety = setTimeout(() => {
+      if (mounted) {
+        console.warn("[Init] Safety override triggered: Forcing UI unlock.");
+        setLoading(false);
+      }
+    }, 2500);
 
-    const init = async () => {
+    const initialize = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && mounted) {
           setIsAuthenticated(true);
           await fetchProfile(session.user.id, session.user.email);
         }
-        // Always attempt background sync
         await syncDatabase();
       } catch (err) {
-        console.error("[Init] Session check failed:", err);
+        console.error("[Init] Sequence failed:", err);
       } finally {
         if (mounted) {
           setLoading(false);
-          clearTimeout(safetyTimer);
+          clearTimeout(safety);
         }
       }
     };
 
-    init();
+    initialize();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        if (session?.user) {
-          await fetchProfile(session.user.id, session.user.email);
-          if (mounted) {
-            setIsAuthenticated(true);
-            setLoading(false);
-          }
-        }
-      } else if (event === 'SIGNED_OUT') {
+      console.log(`[Auth] Event: ${event}`);
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+        // PRIOR LOGIN FIX: Prevent router kick-back by keeping loading state active
+        if (!currentUser) setLoading(true); 
+        
+        await fetchProfile(session.user.id, session.user.email);
         if (mounted) {
-          setCurrentUser(null);
-          setIsAuthenticated(false);
+          setIsAuthenticated(true);
           setLoading(false);
         }
+      } else if (event === 'SIGNED_OUT' && mounted) {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setLoading(false);
       }
     });
 
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
-      clearTimeout(safetyTimer);
+      clearTimeout(safety);
     };
-  }, []); // Run exactly once on mount
+  }, []);
 
   const login = async (email: string, pass: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
