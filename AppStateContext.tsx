@@ -71,7 +71,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const email = data.email || '';
     const metadata = data.user_metadata || {};
     const username = data.username || metadata.username || 'Member';
-    const isSpecial = email === 'admin@rojos.games' || username.toLowerCase().includes('admin');
     
     return {
       id: data.id,
@@ -80,9 +79,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       email: email,
       avatarUrl: data.avatar_url || metadata.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
       bannerUrl: data.banner_url || metadata.banner_url,
-      role: isSpecial ? 'Admin' : (data.role || 'User'),
+      role: data.role || 'User',
       status: (data.status as any) || 'Active',
-      joinDate: data.created_at || new Date().toISOString(),
+      joinDate: data.join_date || data.created_at || new Date().toISOString(),
       postCount: data.post_count || 0,
       about: data.about || '',
       themePreference: (data.theme_preference as ThemeMode) || 'dark',
@@ -149,7 +148,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const loadProfile = async (id: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
     if (!error && data) {
-      setCurrentUser(mapUser(data));
+      const u = mapUser(data);
+      setCurrentUser(u);
+      // Sync local user status with database status immediately
+      if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
     }
   };
 
@@ -309,11 +311,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reason, content_snippet: contentSnippet, status: ModStatus.PENDING
     });
     if (error && error.code === '23505') {
-       alert("This content has already been reported and is currently under review by our moderation team.");
+       alert("This item is already under review by our moderation team.");
     } else if (error) {
        console.error("Report Error:", error);
+       alert("Failed to submit report. Please try again later.");
     } else {
-       alert("Report filed successfully. Thank you for keeping our community safe.");
+       alert("Report filed successfully. Thank you for your feedback.");
        await syncDatabase();
     }
   };
