@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
@@ -19,7 +18,11 @@ const LoginPage: React.FC = () => {
       await login(email, pass);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Authentication failed.');
+      if (err.message?.toLowerCase().includes('email not confirmed')) {
+        setError('Verification pending. Please check your inbox for the activation link.');
+      } else {
+        setError(err.message || 'Authentication failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -34,7 +37,7 @@ const LoginPage: React.FC = () => {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          {error && <div className="p-4 bg-rojo-600/20 border border-rojo-500 text-rojo-500 text-xs font-bold rounded-xl">{error}</div>}
+          {error && <div className="p-4 bg-rojo-600/20 border border-rojo-500 text-rojo-500 text-xs font-bold rounded-xl leading-relaxed">{error}</div>}
           <div>
             <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">Email Address</label>
             <input 
@@ -47,7 +50,11 @@ const LoginPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">Secret Passphrase</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-widest">Secret Passphrase</label>
+              {/* Fix: Removed invalid 'size' prop from Link component which was causing a TypeScript error. */}
+              <Link to="/forgot-password" className="text-[10px] font-black text-rojo-500 uppercase hover:underline">Forgot Key?</Link>
+            </div>
             <input 
               required
               type="password" 

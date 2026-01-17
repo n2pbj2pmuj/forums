@@ -16,6 +16,8 @@ interface AppState {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   signup: (username: string, email: string, pass: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPass: string) => Promise<void>;
   logout: () => void;
   loginAs: (userId: string) => void;
   revertToAdmin: () => void;
@@ -32,7 +34,6 @@ interface AppState {
   likePost: (postId: string) => Promise<void>;
   updateGlobalBanner: (assetId: string) => Promise<void>;
   addGlobalAsset: (name: string, url: string) => Promise<void>;
-  // Added missing method declarations
   resolveReport: (reportId: string, status: ModStatus) => Promise<void>;
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string) => Promise<void>;
 }
@@ -56,7 +57,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     document.documentElement.classList.toggle('light', theme === 'light');
   }, [theme]);
 
-  // Helper to map DB profile to User interface
   const mapUser = (data: any): User => ({
     id: data.id,
     username: data.username,
@@ -74,7 +74,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     banExpires: data.ban_expires,
   });
 
-  // Initial Sync
   useEffect(() => {
     const initSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -89,12 +88,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     initSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        await fetchProfile(session.user.id);
-        setIsAuthenticated(true);
-      } else {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (session) {
+          await fetchProfile(session.user.id);
+          setIsAuthenticated(true);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthenticated(false);
+      } else if (event === 'PASSWORD_RECOVERY') {
+        // App.tsx handles the actual navigation to /update-password
+        // but we set authenticated to true so the route is accessible
+        setIsAuthenticated(true);
       }
     });
 
@@ -103,7 +108,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchProfile = async (uid: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-    // Correctly mapping profile data to User interface
     if (data) setCurrentUser(mapUser(data));
   };
 
@@ -114,7 +118,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: a } = await supabase.from('assets').select('*');
     const { data: r } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
 
-    // Proper mapping of database fields to TypeScript interfaces
     if (t) setThreads(t.map(x => ({
       id: x.id,
       categoryId: x.category_id,
@@ -182,6 +185,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/#/update-password`,
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (newPass: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPass });
+    if (error) throw error;
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setOriginalAdmin(null);
@@ -206,12 +221,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    // Map camelCase keys to snake_case for DB update
     const dbData: any = { ...data };
     if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
     if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
     if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
-    if (data.about !== undefined) { dbData.about = data.about; }
     
     const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
     if (!error) await fetchProfile(currentUser.id);
@@ -252,14 +265,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const toggleThreadPin = async (id: string) => {
     const t = threads.find(x => x.id === id);
-    // Correctly using isPinned (camelCase) for comparison but snake_case for DB column
     await supabase.from('threads').update({ is_pinned: !t?.isPinned }).eq('id', id);
     await syncDatabase();
   };
 
   const toggleThreadLock = async (id: string) => {
     const t = threads.find(x => x.id === id);
-    // Correctly using isLocked (camelCase) for comparison but snake_case for DB column
     await supabase.from('threads').update({ is_locked: !t?.isLocked }).eq('id', id);
     await syncDatabase();
   };
@@ -276,7 +287,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       author_id: currentUser.id,
       content
     });
-    // Increment reply count in threads - corrected property access
     const t = threads.find(x => x.id === threadId);
     await supabase.from('threads').update({ reply_count: (t?.replyCount || 0) + 1 }).eq('id', threadId);
     await syncDatabase();
@@ -298,7 +308,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateGlobalBanner = async (assetId: string) => {
-    await supabase.from('assets').update({ is_active: false }).neq('id', 'temp'); // Reset all
+    await supabase.from('assets').update({ is_active: false }).neq('id', 'temp'); 
     await supabase.from('assets').update({ is_active: true }).eq('id', assetId);
     await syncDatabase();
   };
@@ -308,13 +318,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  // Implement resolveReport
   const resolveReport = async (reportId: string, status: ModStatus) => {
     await supabase.from('reports').update({ status }).eq('id', reportId);
     await syncDatabase();
   };
 
-  // Implement addReport
   const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string) => {
     if (!currentUser) return;
     await supabase.from('reports').insert({
@@ -330,7 +338,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <AppStateContext.Provider value={{
-      isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, assets, theme, loading,
+      isAuthenticated, login, signup, resetPassword, updatePassword, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, assets, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, 
       toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost, updateGlobalBanner, addGlobalAsset,
       resolveReport, addReport
