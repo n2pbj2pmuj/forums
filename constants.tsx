@@ -71,6 +71,9 @@ export const MOCK_THREADS: Thread[] = [
     createdAt: '2026-01-09T10:00:00Z', 
     replyCount: 0, 
     viewCount: 42, 
+    // Added missing required Thread properties
+    likes: 0,
+    likedBy: [],
     isLocked: false, 
     isPinned: true 
   }

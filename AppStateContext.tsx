@@ -2,7 +2,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './types';
 import { supabase } from './services/supabaseClient';
-import { MOCK_THREADS, MOCK_POSTS, MOCK_USERS, MOCK_REPORTS } from './constants';
 
 interface ChatMessage {
   id: string;
@@ -21,12 +20,11 @@ interface AppState {
   posts: Post[];
   reports: Report[];
   chatMessages: ChatMessage[];
+  allChatPartners: string[];
   theme: ThemeMode;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   signup: (username: string, email: string, pass: string) => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-  updatePassword: (newPass: string) => Promise<void>;
   logout: () => void;
   loginAs: (userId: string) => void;
   revertToAdmin: () => void;
@@ -42,10 +40,14 @@ interface AppState {
   deleteThread: (threadId: string) => Promise<void>;
   addPost: (threadId: string, content: string) => Promise<void>;
   likePost: (postId: string) => Promise<void>;
+  likeThread: (threadId: string) => Promise<void>;
   resolveReport: (reportId: string, status: ModStatus) => Promise<void>;
-  addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string) => Promise<void>;
+  addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => Promise<void>;
   sendChatMessage: (receiverId: string, content: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
+  // Added missing password methods
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
@@ -56,19 +58,15 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [originalAdmin, setOriginalAdmin] = useState<User | null>(null);
   
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [threads, setThreads] = useState<Thread[]>(MOCK_THREADS);
-  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
-  const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
+  const [users, setUsers] = useState<User[]>([]);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [allChatPartners, setAllChatPartners] = useState<string[]>([]);
 
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    document.documentElement.classList.toggle('light', theme === 'light');
-  }, [theme]);
 
   const mapUser = (data: any): User => {
     const email = data.email || '';
@@ -84,7 +82,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       avatarUrl: data.avatar_url || metadata.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
       bannerUrl: data.banner_url || metadata.banner_url,
       role: isSpecial ? 'Admin' : (data.role || 'User'),
-      status: data.status || 'Active',
+      status: (data.status as any) || 'Active',
       joinDate: data.created_at || new Date().toISOString(),
       postCount: data.post_count || 0,
       about: data.about || '',
@@ -97,7 +95,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const syncDatabase = async () => {
     try {
       const results = await Promise.allSettled([
-        supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
+        supabase.from('threads').select('*, profiles(username, display_name)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name)').order('created_at', { ascending: true })
@@ -109,7 +107,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setThreads(threadsRes.value.data.map((x: any) => ({
           id: x.id, categoryId: x.category_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
           title: x.title, content: x.content, createdAt: x.created_at, replyCount: x.reply_count || 0,
-          viewCount: x.view_count || 0, isLocked: x.is_locked || false, isPinned: x.is_pinned || false
+          viewCount: x.view_count || 0, likes: x.likes || 0, likedBy: x.liked_by || [],
+          isLocked: x.is_locked || false, isPinned: x.is_pinned || false
         })));
       }
       if (usersRes.status === 'fulfilled' && usersRes.value.data) {
@@ -118,7 +117,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (reportsRes.status === 'fulfilled' && reportsRes.value.data) {
         setReports(reportsRes.value.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
-          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          authorUsername: x.author_username, targetUrl: x.target_url,
+          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
         })));
       }
       if (postsRes.status === 'fulfilled' && postsRes.value.data) {
@@ -127,99 +127,67 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           content: x.content, createdAt: x.created_at, likes: x.likes || 0, likedBy: x.liked_by || []
         })));
       }
+      
+      // Fetch Chat Partners (to only show messaged users in DM list)
+      if (currentUser) {
+        const { data: partners } = await supabase.from('messages')
+          .select('sender_id, receiver_id')
+          .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
+        
+        if (partners) {
+          const ids = new Set<string>();
+          partners.forEach(m => {
+            if (m.sender_id !== currentUser.id) ids.add(m.sender_id);
+            if (m.receiver_id !== currentUser.id) ids.add(m.receiver_id);
+          });
+          setAllChatPartners(Array.from(ids));
+        }
+      }
     } catch (e) {
-      console.warn("Sync failed - background task aborted.");
+      console.warn("Sync failed.");
     }
   };
 
   const loadProfile = async (id: string) => {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-      if (!error && data) {
-        setCurrentUser(prev => prev ? { ...prev, ...mapUser(data) } : mapUser(data));
-      }
-    } catch (e) {}
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+    if (!error && data) {
+      setCurrentUser(mapUser(data));
+    }
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setOriginalAdmin(null);
-    setLoading(false);
   };
 
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
-
-    const unlockTimer = setTimeout(() => setLoading(false), 2500);
-
     const initialize = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setCurrentUser(mapUser(session.user));
-          loadProfile(session.user.id);
-          syncDatabase();
-        }
-      } catch (err) {
-        console.error("Init Error:", err);
-      } finally {
-        setLoading(false);
-        clearTimeout(unlockTimer);
-      }
-    };
-
-    initialize();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        setCurrentUser(mapUser(session.user));
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          loadProfile(session.user.id);
-          syncDatabase();
-        }
-        setLoading(false);
-      } else {
-        setCurrentUser(null);
-        setLoading(false);
+        await loadProfile(session.user.id);
+        await syncDatabase();
       }
-    });
-
-    return () => authListener.subscription.unsubscribe();
+      setLoading(false);
+    };
+    initialize();
   }, []);
 
   const login = async (email: string, pass: string) => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-      if (error) throw error;
-      if (data.user) {
-        setCurrentUser(mapUser(data.user));
-        loadProfile(data.user.id);
-        syncDatabase();
-      }
-    } finally {
-      setLoading(false);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    if (data.user) {
+      await loadProfile(data.user.id);
+      await syncDatabase();
     }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({ 
-        email, password: pass, options: { data: { username } }
-      });
-      if (error) throw error;
-      if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id, username, display_name: username, email,
-          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`, role: 'User'
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
+    await supabase.auth.signUp({ 
+      email, password: pass, options: { data: { username } }
+    });
   };
 
   const loginAs = (userId: string) => {
@@ -245,12 +213,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
     if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
     if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
-    
     await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
-    const { data: refreshed } = await supabase.auth.getUser();
-    if (refreshed.user) {
-      setCurrentUser(mapUser(refreshed.user));
-    }
+    await loadProfile(currentUser.id);
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
@@ -280,12 +244,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const incrementThreadView = async (threadId: string) => {
     try {
-      // Using direct update as RPC 'increment_thread_view' might not exist yet
+      await supabase.rpc('increment_thread_view', { t_id: threadId });
+    } catch (e) {
       const t = threads.find(x => x.id === threadId);
       if (t) {
         await supabase.from('threads').update({ view_count: (t.viewCount || 0) + 1 }).eq('id', threadId);
       }
-    } catch (e) {}
+    }
   };
 
   const toggleThreadPin = async (id: string) => {
@@ -308,10 +273,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addPost = async (threadId: string, content: string) => {
     if (!currentUser) return;
     await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    const t = threads.find(x => x.id === threadId);
-    if (t) {
-      await supabase.from('threads').update({ reply_count: (t.replyCount || 0) + 1 }).eq('id', threadId);
-    }
     await syncDatabase();
   };
 
@@ -326,52 +287,70 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
+  const likeThread = async (threadId: string) => {
+    if (!currentUser) return;
+    const t = threads.find(x => x.id === threadId);
+    if (!t) return;
+    const likedBy = t.likedBy || [];
+    const isLiked = likedBy.includes(currentUser.id);
+    const newLikedBy = isLiked ? likedBy.filter(id => id !== currentUser.id) : [...likedBy, currentUser.id];
+    await supabase.from('threads').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', threadId);
+    await syncDatabase();
+  };
+
   const resolveReport = async (reportId: string, status: ModStatus) => {
     await supabase.from('reports').update({ status }).eq('id', reportId);
     await syncDatabase();
   };
 
-  const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string) => {
+  const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => {
     if (!currentUser) return;
-    await supabase.from('reports').insert({
+    const { error } = await supabase.from('reports').insert({
       type, target_id: targetId, reported_by: currentUser.username,
+      author_username: authorUsername, target_url: targetUrl,
       reason, content_snippet: contentSnippet, status: ModStatus.PENDING
     });
-    await syncDatabase();
+    if (error && error.code === '23505') {
+       alert("This content has already been reported and is being reviewed.");
+    } else if (error) {
+       console.error("Report Error:", error);
+    } else {
+       alert("Report filed successfully.");
+       await syncDatabase();
+    }
   };
 
   const sendChatMessage = async (receiverId: string, content: string) => {
     if (!currentUser) return;
-    const newMessage = {
-      sender_id: currentUser.id,
-      receiver_id: receiverId,
-      content,
-    };
-    const { data, error } = await supabase.from('messages').insert(newMessage).select().single();
-    if (!error && data) {
-      setChatMessages(prev => [...prev, data as ChatMessage]);
-    }
+    await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: receiverId, content });
+    await syncDatabase();
   };
 
   const fetchChatHistory = async (otherUserId: string) => {
     if (!currentUser) return;
-    const { data, error } = await supabase.from('messages')
+    const { data } = await supabase.from('messages')
       .select('*')
       .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser.id})`)
       .order('created_at', { ascending: true });
-    
-    if (!error && data) {
-      setChatMessages(data as ChatMessage[]);
-    }
+    if (data) setChatMessages(data as ChatMessage[]);
+  };
+
+  // Implemented missing password methods
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
   };
 
   return (
     <AppStateContext.Provider value={{
-      isAuthenticated, login, signup, resetPassword: async (e) => { await supabase.auth.resetPasswordForEmail(e); },
-      updatePassword: async (p) => { await supabase.auth.updateUser({ password: p }); },
-      logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory
+      isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost, likeThread,
+      resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword
     }}>
       {children}
     </AppStateContext.Provider>

@@ -72,22 +72,14 @@ CREATE TABLE messages (
 CREATE TABLE reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   type TEXT NOT NULL, -- 'POST', 'THREAD', 'USER'
-  target_id TEXT NOT NULL UNIQUE, -- Unique constraint: only reported once ever
-  reported_by TEXT NOT NULL, -- Username of reporter
-  author_username TEXT, -- Username of the reported person
-  target_url TEXT, -- Link to the reported content
+  target_id TEXT NOT NULL UNIQUE, -- Only reportable once
+  reported_by TEXT NOT NULL, -- Reporter Username
+  author_username TEXT, -- Reported Person Username
+  target_url TEXT, -- Link to content
   reason TEXT NOT NULL,
   content_snippet TEXT,
   status TEXT DEFAULT 'PENDING',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE assets (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name TEXT NOT NULL,
-  image_url TEXT NOT NULL,
-  type TEXT DEFAULT 'Banner',
-  is_active BOOLEAN DEFAULT FALSE
 );
 
 -- ==========================================
@@ -153,39 +145,18 @@ ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-
--- Allow admins/mods full access to profiles for banning/roles
-CREATE POLICY "Admins can update all profiles" ON profiles FOR UPDATE USING (
+CREATE POLICY "Public profiles" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Users update own" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Admins update all" ON profiles FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator'))
 );
-
-CREATE POLICY "Threads are viewable by everyone" ON threads FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can create threads" ON threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Users can update threads for likes" ON threads FOR UPDATE USING (true);
-
-CREATE POLICY "Posts are viewable by everyone" ON posts FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can create posts" ON posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Users can update posts for likes" ON posts FOR UPDATE USING (true);
-
-CREATE POLICY "Messages private access" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Messages send access" ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Reports manage access" ON reports FOR ALL USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator'))
-);
-CREATE POLICY "Users can create reports" ON reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
--- ==========================================
--- 6. BOOTSTRAP
--- ==========================================
-INSERT INTO public.profiles (id, email, username, display_name, role)
-SELECT 
-    id, 
-    email, 
-    split_part(email, '@', 1),
-    split_part(email, '@', 1),
-    'Admin' 
-FROM auth.users
-WHERE id NOT IN (SELECT id FROM public.profiles);
+CREATE POLICY "Threads viewable" ON threads FOR SELECT USING (true);
+CREATE POLICY "Threads insert" ON threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Threads update (likes)" ON threads FOR UPDATE USING (true);
+CREATE POLICY "Posts viewable" ON posts FOR SELECT USING (true);
+CREATE POLICY "Posts insert" ON posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Posts update (likes)" ON posts FOR UPDATE USING (true);
+CREATE POLICY "Messages private" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Messages send" ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Reports admin" ON reports FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator')));
+CREATE POLICY "Reports create" ON reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
