@@ -54,47 +54,34 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [theme]);
 
   const mapUser = (data: any): User => {
-    const safeId = data?.id || 'guest';
     return {
-      id: safeId,
-      username: data?.username || `User_${safeId.substring(0, 5)}`,
-      displayName: data?.display_name || data?.username || 'New Member',
-      email: data?.email || '',
-      avatarUrl: data?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeId}`,
-      bannerUrl: data?.banner_url,
-      role: (data?.role as any) || 'User',
-      status: (data?.status as any) || 'Active',
-      joinDate: data?.created_at || new Date().toISOString(),
-      postCount: data?.post_count || 0,
-      about: data?.about || '',
-      themePreference: (data?.theme_preference as ThemeMode) || 'dark',
-      banReason: data?.ban_reason,
-      banExpires: data?.ban_expires,
+      id: data.id,
+      username: data.username || 'User',
+      displayName: data.display_name || data.username || 'Member',
+      email: data.email || '',
+      avatarUrl: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
+      bannerUrl: data.banner_url,
+      role: (data.role as any) || 'User',
+      status: (data.status as any) || 'Active',
+      joinDate: data.created_at || new Date().toISOString(),
+      postCount: data.post_count || 0,
+      about: data.about || '',
+      themePreference: (data.theme_preference as ThemeMode) || 'dark',
+      banReason: data.ban_reason,
+      banExpires: data.ban_expires,
     };
   };
 
-  const fetchProfile = async (uid: string, email?: string) => {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error || !data) {
-        const fallback = mapUser({ id: uid, email: email, username: email?.split('@')[0] });
-        setCurrentUser(fallback);
-        return fallback;
-      }
-      const mapped = mapUser(data);
-      setCurrentUser(mapped);
-      return mapped;
-    } catch (err) {
-      console.error("[Profile] Critical fetch failure:", err);
-      const fallback = mapUser({ id: uid, email });
-      setCurrentUser(fallback);
-      return fallback;
-    }
+  const fetchProfile = async (uid: string) => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
+    if (error || !data) return null;
+    const user = mapUser(data);
+    setCurrentUser(user);
+    return user;
   };
 
   const syncDatabase = async () => {
     try {
-      // Fetch data but don't block the UI - return partial data as it arrives
       const [threadsRes, postsRes, usersRes, reportsRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name)'),
@@ -140,51 +127,48 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.warn("[Sync] Data sync error:", err);
+      console.warn("Background sync delay:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    const startApp = async () => {
+    const initialize = async () => {
       try {
-        // 1. Check for session first
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (mounted) {
-          if (session?.user) {
+        if (session?.user && mounted) {
+          const profile = await fetchProfile(session.user.id);
+          if (profile) {
             setIsAuthenticated(true);
-            // 2. Load profile but don't hang forever if it fails
-            await Promise.race([
-              fetchProfile(session.user.id, session.user.email),
-              new Promise(resolve => setTimeout(resolve, 3000))
-            ]);
+            syncDatabase(); // Start background sync
           } else {
+            // Profile missing in DB, force logout to clear stale session
+            await supabase.auth.signOut();
             setIsAuthenticated(false);
           }
+        } else if (mounted) {
+          setIsAuthenticated(false);
         }
       } catch (err) {
-        console.error("[Auth] Initial check failed:", err);
+        console.error("Initialization error:", err);
       } finally {
-        if (mounted) {
-          setLoading(false);
-          // 3. Always trigger data sync in the background
-          syncDatabase();
-        }
+        if (mounted) setLoading(false);
       }
     };
 
-    startApp();
+    initialize();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
-        setIsAuthenticated(true);
-        await fetchProfile(session.user.id, session.user.email);
-        if (mounted) {
-          setLoading(false);
+      if (event === 'SIGNED_IN' && session?.user && mounted) {
+        setLoading(true);
+        const profile = await fetchProfile(session.user.id);
+        if (profile) {
+          setIsAuthenticated(true);
           syncDatabase();
         }
+        setLoading(false);
       } else if (event === 'SIGNED_OUT' && mounted) {
         setCurrentUser(null);
         setIsAuthenticated(false);
@@ -202,8 +186,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     if (data.session) {
-      setIsAuthenticated(true);
-      await fetchProfile(data.user.id, data.user.email);
+      const profile = await fetchProfile(data.user.id);
+      if (profile) setIsAuthenticated(true);
     }
   };
 

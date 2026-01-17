@@ -11,13 +11,10 @@ const HomePage: React.FC = () => {
   const [newContent, setNewContent] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Defensive filtering to prevent crashes if threads or properties are undefined
-  const filteredThreads = (threads || []).filter(t => {
-    const title = (t?.title || "").toLowerCase();
-    const author = (t?.authorName || "").toLowerCase();
-    const query = searchQuery.toLowerCase();
-    return title.includes(query) || author.includes(query);
-  });
+  const filteredThreads = threads.filter(t => 
+    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.authorName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const isDark = theme === 'dark';
 
@@ -60,7 +57,7 @@ const HomePage: React.FC = () => {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex space-x-4 min-w-0 flex-1">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg border shrink-0 ${isDark ? 'bg-rojo-950 border-rojo-900/30 text-rojo-500' : 'bg-rojo-50 border-rojo-100 text-rojo-600'}`}>
-                    {thread.authorName?.charAt(0) || '?'}
+                    {thread.authorName.charAt(0)}
                   </div>
                   <div className="min-w-0">
                     <Link to={`/thread/${thread.id}`} className={`text-lg font-bold tracking-tight block mb-1 truncate ${isDark ? 'text-slate-100 hover:text-rojo-500' : 'text-slate-900 hover:text-rojo-600'}`}>
