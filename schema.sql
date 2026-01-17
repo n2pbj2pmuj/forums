@@ -1,121 +1,9 @@
 
 -- ==========================================
--- 1. CLEANUP (Reset the Database)
--- ==========================================
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP TRIGGER IF EXISTS on_post_created ON public.posts;
-DROP FUNCTION IF EXISTS public.handle_new_user();
-DROP FUNCTION IF EXISTS public.handle_post_stats();
-DROP FUNCTION IF EXISTS public.increment_thread_view(uuid);
-
-DROP TABLE IF EXISTS messages CASCADE;
-DROP TABLE IF EXISTS reports CASCADE;
-DROP TABLE IF EXISTS posts CASCADE;
-DROP TABLE IF EXISTS threads CASCADE;
-DROP TABLE IF EXISTS profiles CASCADE;
-DROP TABLE IF EXISTS assets CASCADE;
-
--- ==========================================
--- 2. CREATE TABLES
+-- 1. ADDITIVE UPDATE (No Reset)
 -- ==========================================
 
-CREATE TABLE profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  display_name TEXT,
-  email TEXT,
-  avatar_url TEXT,
-  role TEXT DEFAULT 'User', 
-  status TEXT DEFAULT 'Active',
-  join_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  post_count INTEGER DEFAULT 0,
-  about TEXT,
-  theme_preference TEXT DEFAULT 'dark',
-  ban_reason TEXT,
-  ban_expires TEXT
-);
-
-CREATE TABLE threads (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  category_id TEXT DEFAULT 'cat2', 
-  author_id UUID REFERENCES profiles(id),
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  reply_count INTEGER DEFAULT 0,
-  view_count INTEGER DEFAULT 0,
-  likes INTEGER DEFAULT 0,
-  liked_by UUID[] DEFAULT '{}',
-  is_locked BOOLEAN DEFAULT FALSE,
-  is_pinned BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE posts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  thread_id UUID REFERENCES threads(id) ON DELETE CASCADE,
-  author_id UUID REFERENCES profiles(id),
-  content TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  likes INTEGER DEFAULT 0,
-  liked_by UUID[] DEFAULT '{}'
-);
-
-CREATE TABLE messages (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  sender_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  receiver_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  is_read BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE reports (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type TEXT NOT NULL, -- 'POST', 'THREAD', 'USER'
-  target_id TEXT NOT NULL UNIQUE, -- Unique constraint to prevent duplicate reports
-  reported_by TEXT NOT NULL, -- Reporter Username
-  author_username TEXT, -- Person being reported
-  target_url TEXT, -- Link to content
-  reason TEXT NOT NULL,
-  content_snippet TEXT,
-  status TEXT DEFAULT 'PENDING',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE assets (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name TEXT NOT NULL,
-  image_url TEXT NOT NULL,
-  type TEXT DEFAULT 'Banner',
-  is_active BOOLEAN DEFAULT FALSE
-);
-
--- ==========================================
--- 3. THE SMART AUTOMATION
--- ==========================================
-
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
-  custom_username TEXT := new.raw_user_meta_data->>'username';
-BEGIN
-  IF custom_username IS NULL OR custom_username = '' THEN
-    custom_username := split_part(new.email, '@', 1);
-  END IF;
-
-  INSERT INTO public.profiles (id, email, role, username, display_name, avatar_url)
-  VALUES (
-    new.id, 
-    new.email, 
-    CASE WHEN new.email = 'admin@rojos.games' THEN 'Admin' ELSE 'User' END, 
-    custom_username,
-    custom_username,
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=' || custom_username
-  );
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
+-- Trigger to increment stats when a post is created
 CREATE OR REPLACE FUNCTION public.handle_post_stats()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -125,6 +13,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Trigger to decrement stats when a post is deleted
+CREATE OR REPLACE FUNCTION public.handle_post_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.profiles SET post_count = GREATEST(0, post_count - 1) WHERE id = OLD.author_id;
+  UPDATE public.threads SET reply_count = GREATEST(0, reply_count - 1) WHERE id = OLD.thread_id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to cleanup when a thread is deleted (post_count adjustment for author)
+CREATE OR REPLACE FUNCTION public.handle_thread_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Posts are deleted automatically via ON DELETE CASCADE in the schema.
+  -- The on_post_deleted trigger will fire for each, handling profile post counts.
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- View increment RPC
 CREATE OR REPLACE FUNCTION public.increment_thread_view(t_id UUID)
 RETURNS VOID AS $$
 BEGIN
@@ -133,58 +42,56 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ==========================================
--- 4. BIND TRIGGERS
+-- 2. REBIND TRIGGERS (Safe execution)
 -- ==========================================
 
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
+DROP TRIGGER IF EXISTS on_post_created ON public.posts;
 CREATE TRIGGER on_post_created
   AFTER INSERT ON public.posts
   FOR EACH ROW EXECUTE PROCEDURE public.handle_post_stats();
 
--- ==========================================
--- 5. ENABLE SECURITY (RLS)
--- ==========================================
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE threads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS on_post_deleted ON public.posts;
+CREATE TRIGGER on_post_deleted
+  AFTER DELETE ON public.posts
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_post_deletion();
 
-CREATE POLICY "Public profiles are viewable" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins update all profiles" ON profiles FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator'))
+DROP TRIGGER IF EXISTS on_thread_deleted ON public.threads;
+CREATE TRIGGER on_thread_deleted
+  AFTER DELETE ON public.threads
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_thread_deletion();
+
+-- ==========================================
+-- 3. UPDATED POLICIES (Add permissions)
+-- ==========================================
+
+-- Ensure staff helper exists
+CREATE OR REPLACE FUNCTION is_staff(user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = user_id AND (role = 'Admin' OR role = 'Moderator')
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- THREADS - Allow Delete for Authors and Staff
+DROP POLICY IF EXISTS "Threads delete (author/staff)" ON threads;
+CREATE POLICY "Threads delete (author/staff)" ON threads FOR DELETE USING (
+  auth.uid() = author_id OR is_staff(auth.uid())
 );
 
-CREATE POLICY "Threads are viewable" ON threads FOR SELECT USING (true);
-CREATE POLICY "Threads insert" ON threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Threads update (likes/mod)" ON threads FOR UPDATE USING (true);
-
-CREATE POLICY "Posts are viewable" ON posts FOR SELECT USING (true);
-CREATE POLICY "Posts insert" ON posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Posts update (likes)" ON posts FOR UPDATE USING (true);
-
-CREATE POLICY "Messages private" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Messages send" ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Reports manage access" ON reports FOR ALL USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator'))
+-- POSTS - Allow Delete for Authors and Staff
+DROP POLICY IF EXISTS "Posts delete (author/staff)" ON posts;
+CREATE POLICY "Posts delete (author/staff)" ON posts FOR DELETE USING (
+  auth.uid() = author_id OR is_staff(auth.uid())
 );
-CREATE POLICY "Reports create" ON reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
--- ==========================================
--- 6. INSTANT ACCOUNT RECOVERY
--- ==========================================
-INSERT INTO public.profiles (id, email, username, display_name, role)
-SELECT 
-    id, 
-    email, 
-    split_part(email, '@', 1),
-    split_part(email, '@', 1),
-    'Admin' 
-FROM auth.users
-WHERE id NOT IN (SELECT id FROM public.profiles)
-ON CONFLICT (id) DO NOTHING;
+-- Ensure Banned Users can't create content at DB level
+DROP POLICY IF EXISTS "Threads insert authenticated" ON threads;
+CREATE POLICY "Threads insert authenticated" ON threads FOR INSERT WITH CHECK (
+  auth.role() = 'authenticated' AND (SELECT status FROM profiles WHERE id = auth.uid()) != 'Banned'
+);
+
+DROP POLICY IF EXISTS "Posts insert authenticated" ON posts;
+CREATE POLICY "Posts insert authenticated" ON posts FOR INSERT WITH CHECK (
+  auth.role() = 'authenticated' AND (SELECT status FROM profiles WHERE id = auth.uid()) != 'Banned'
+);
