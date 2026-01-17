@@ -10,7 +10,7 @@ const ThreadDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
     threads, posts, currentUser, theme,
-    addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, incrementThreadView
+    addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView
   } = useAppState();
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,6 +42,8 @@ const ThreadDetailPage: React.FC = () => {
       navigate('/');
     }
   };
+
+  const isThreadLiked = thread.likedBy?.includes(currentUser?.id || '');
 
   return (
     <Layout>
@@ -77,8 +79,14 @@ const ThreadDetailPage: React.FC = () => {
               <div className={`leading-relaxed mb-10 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 {thread.content}
               </div>
-              <div className="flex items-center space-x-6 border-t border-rojo-900/10 pt-6">
-                <button onClick={() => addReport(ReportType.THREAD, thread.id, 'Rules Violation', thread.content.substring(0, 50))} className="text-[10px] font-black uppercase text-slate-600 hover:text-rojo-500 flex items-center transition-colors">Report Thread</button>
+              <div className="flex items-center justify-between border-t border-rojo-900/10 pt-6">
+                <div className="flex items-center space-x-6">
+                  <button onClick={() => likeThread(thread.id)} className={`flex items-center gap-1 font-black text-xs uppercase transition-colors ${isThreadLiked ? 'text-rojo-500' : 'text-slate-500 hover:text-rojo-400'}`}>
+                    <svg className={`w-5 h-5 ${isThreadLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                    {thread.likes} Likes
+                  </button>
+                  <button onClick={() => addReport(ReportType.THREAD, thread.id, 'Rules Violation', thread.content.substring(0, 100), thread.authorName, window.location.href)} className="text-[10px] font-black uppercase text-slate-600 hover:text-rojo-500 flex items-center transition-colors">Report Thread</button>
+                </div>
               </div>
             </div>
           </div>
@@ -105,7 +113,7 @@ const ThreadDetailPage: React.FC = () => {
                           <svg className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                           {post.likes}
                         </button>
-                        <button onClick={() => addReport(ReportType.POST, post.id, 'Content Violation', post.content.substring(0, 50))} className="hover:text-rojo-500 transition-colors">Flag</button>
+                        <button onClick={() => addReport(ReportType.POST, post.id, 'Content Violation', post.content.substring(0, 100), post.authorName, `${window.location.href}#${post.id}`)} className="hover:text-rojo-500 transition-colors">Flag</button>
                      </div>
                   </div>
                 </div>
