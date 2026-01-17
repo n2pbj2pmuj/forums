@@ -74,24 +74,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const fetchProfile = async (uid: string, email?: string) => {
-    console.log(`[Session] Fetching profile for UID: ${uid}`);
+    console.log(`[Session] Syncing profile for UID: ${uid}`);
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       
       if (error || !data) {
-        console.warn("[Session] Profile fetch failed or missing. Creating fallback user profile.");
-        // Defensive fallback to prevent app hang
+        console.warn("[Session] Profile missing or slow. Using defensive fallback.");
         const fallback = mapUser({ id: uid, email: email, username: email?.split('@')[0] });
         setCurrentUser(fallback);
         return fallback;
       }
       
-      console.log("[Session] Profile loaded successfully from DB.");
       const mapped = mapUser(data);
       setCurrentUser(mapped);
       return mapped;
     } catch (err) {
-      console.error("[Session] Critical profile error:", err);
+      console.error("[Session] Critical profile failure:", err);
       const fallback = mapUser({ id: uid, email });
       setCurrentUser(fallback);
       return fallback;
@@ -140,68 +138,70 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         targetId: x.target_id,
         reportedBy: x.reported_by,
         reason: x.reason,
-        // Fixed mapping to use camelCase contentSnippet as defined in Report interface
         contentSnippet: x.content_snippet,
         status: x.status as ModStatus,
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.error("[Sync] Database sync failed:", err);
+      console.error("[Sync] Background database refresh failed:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    
-    // SAFETY VALVE: Force stop loading if database takes > 3 seconds
-    const safetyTimer = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn("[Session] Force stopping loading screen due to safety timeout.");
-        setLoading(false);
-      }
-    }, 3000);
 
     const initSession = async () => {
-      console.log("[Session] Initializing forum session...");
+      console.log("[Session] Initializing session check...");
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (sessionError) throw sessionError;
+        if (sessionError) {
+          console.error("[Session] Error checking stored session:", sessionError);
+        }
 
         if (session?.user) {
-          console.log("[Session] Active session found. Restoring...");
+          console.log("[Session] Stored session identified. Fetching user profile...");
           await fetchProfile(session.user.id, session.user.email);
           if (mounted) setIsAuthenticated(true);
         } else {
-          console.log("[Session] No active session. Waiting for login.");
+          console.log("[Session] No active session found.");
         }
         
-        await syncDatabase();
+        // Load data in parallel, but don't block the UI if it's slow
+        syncDatabase();
       } catch (err) {
-        console.error("[Session] Initialization failed:", err);
+        console.error("[Session] Unhandled error during startup:", err);
       } finally {
         if (mounted) {
+          console.log("[Session] Startup complete. Unlocking UI.");
           setLoading(false);
-          clearTimeout(safetyTimer);
-          console.log("[Session] Loading complete.");
         }
       }
     };
 
     initSession();
 
+    // Reverting to the prior login logic that was stable
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[Auth] Event: ${event}`);
+      console.log(`[Auth] System Event: ${event}`);
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session?.user) {
+          // If we weren't already authenticated (e.g. logging in), ensure we show the loading state
+          // to prevent the router from kicking us back to login before the user state is set.
+          if (!isAuthenticated) setLoading(true);
+          
           await fetchProfile(session.user.id, session.user.email);
-          setIsAuthenticated(true);
-          setLoading(false);
+          if (mounted) {
+            setIsAuthenticated(true);
+            setLoading(false);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        setLoading(false);
+        if (mounted) {
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          setLoading(false);
+        }
       }
     });
 
@@ -209,7 +209,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const login = async (email: string, pass: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });

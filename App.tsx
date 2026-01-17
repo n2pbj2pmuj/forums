@@ -38,7 +38,7 @@ const ProtectedRoutes: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        <div className="text-rojo-500 font-black text-2xl animate-pulse uppercase tracking-[0.2em] mb-4">Entering Forums...</div>
+        <div className="text-rojo-500 font-black text-2xl animate-pulse uppercase tracking-[0.2em] mb-4">Syncing Forums...</div>
         <div className="w-48 h-1 bg-rojo-900/30 rounded-full overflow-hidden">
           <div className="w-1/2 h-full bg-rojo-500 animate-[loading_2s_infinite]"></div>
         </div>
