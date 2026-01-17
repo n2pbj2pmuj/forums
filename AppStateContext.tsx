@@ -79,7 +79,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (error) {
         console.warn("Profile fetch error (likely no record yet):", error.message);
-        // Fallback user if profile table trigger hasn't finished
         setCurrentUser(mapUser({ id: uid }));
       } else if (data) {
         setCurrentUser(mapUser(data));
@@ -180,8 +179,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
+    
+    // Explicitly update state on success to avoid waiting for the onAuthStateChange listener
+    if (data.session) {
+      setIsAuthenticated(true);
+      await fetchProfile(data.user.id);
+    }
   };
 
   const signup = async (username: string, email: string, pass: string) => {

@@ -11,7 +11,7 @@ const LoginPage: React.FC = () => {
   const { login, isAuthenticated } = useAppState();
   const navigate = useNavigate();
 
-  // Redirect automatically if authenticated
+  // Redirect automatically if already authenticated or state changes elsewhere
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/');
@@ -27,7 +27,10 @@ const LoginPage: React.FC = () => {
     
     try {
       await login(email, pass);
-      // The useEffect above will handle redirection once the context updates
+      // On success, we set loading to false and navigate immediately
+      // This is faster than waiting for the context/useEffect to cycle
+      setLoading(false);
+      navigate('/');
     } catch (err: any) {
       setLoading(false); // Stop loading ONLY if there is an error
       if (err.message?.toLowerCase().includes('email not confirmed')) {
@@ -65,7 +68,6 @@ const LoginPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-[10px] font-black uppercase text-slate-500 tracking-widest">Secret Passphrase</label>
-              {/* Fixed: Removed unsupported 'size' prop from Link component */}
               <Link to="/forgot-password" className="text-[10px] font-black text-rojo-500 uppercase hover:underline">Forgot Key?</Link>
             </div>
             <input 
@@ -84,7 +86,15 @@ const LoginPage: React.FC = () => {
             disabled={loading}
             className="w-full bg-rojo-600 hover:bg-rojo-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-rojo-900/20 transition-all uppercase text-sm tracking-widest disabled:opacity-50"
           >
-            {loading ? 'Authenticating...' : 'Authorize Session'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Authenticating...
+              </span>
+            ) : 'Authorize Session'}
           </button>
         </form>
 
