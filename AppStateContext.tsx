@@ -77,7 +77,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (error || !data) {
-        console.warn("[Profile] Fetch missing, using fallback profile.");
         const fallback = mapUser({ id: uid, email: email, username: email?.split('@')[0] });
         setCurrentUser(fallback);
         return fallback;
@@ -140,35 +139,38 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.error("[Sync] Background sync failed:", err);
+      console.warn("[Sync] Background sync failed:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
     
-    // SAFETY OVERRIDE: Clear loading after 2.5 seconds regardless of DB state
+    // SAFETY OVERRIDE: 3-second absolute maximum for the loading screen
     const safety = setTimeout(() => {
-      if (mounted) {
-        console.warn("[Init] Safety override triggered: Forcing UI unlock.");
+      if (mounted && loading) {
+        console.warn("[Init] Safety timeout: Force clearing loading screen.");
         setLoading(false);
       }
-    }, 2500);
+    }, 3000);
 
     const initialize = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        
         if (session?.user && mounted) {
           setIsAuthenticated(true);
+          // Only wait for the user profile, not the entire forum database
           await fetchProfile(session.user.id, session.user.email);
         }
-        await syncDatabase();
       } catch (err) {
-        console.error("[Init] Sequence failed:", err);
+        console.error("[Init] Error:", err);
       } finally {
         if (mounted) {
           setLoading(false);
           clearTimeout(safety);
+          // Run data sync in the background so the user can see the UI immediately
+          syncDatabase();
         }
       }
     };
@@ -176,15 +178,15 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     initialize();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[Auth] Event: ${event}`);
       if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
-        // PRIOR LOGIN FIX: Prevent router kick-back by keeping loading state active
+        // PRIOR LOGIN FIX: Prevent router blink by keeping loading on during profile fetch
         if (!currentUser) setLoading(true); 
         
         await fetchProfile(session.user.id, session.user.email);
         if (mounted) {
           setIsAuthenticated(true);
           setLoading(false);
+          syncDatabase();
         }
       } else if (event === 'SIGNED_OUT' && mounted) {
         setCurrentUser(null);
