@@ -38,26 +38,18 @@ interface AppState {
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
 
-// Synchronous check for session hint
-const getSessionHint = () => {
-  try {
-    const keys = Object.keys(localStorage);
-    return keys.some(key => key.includes('auth-token')) || localStorage.getItem('rojo_logged_in') === 'true';
-  } catch (e) {
-    return false;
-  }
-};
-
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>('dark');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [originalAdmin, setOriginalAdmin] = useState<User | null>(null);
+  
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [threads, setThreads] = useState<Thread[]>(MOCK_THREADS);
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
+
+  const isAuthenticated = !!currentUser;
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -89,9 +81,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const fetchProfile = async (uid: string, fallbackEmail?: string, metadata?: any): Promise<User> => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error || !data) {
-        return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
-      }
+      if (error || !data) return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
       return mapUser(data);
     } catch (e) {
       return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
@@ -120,50 +110,25 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data: userData } = await supabase.from('profiles').select('*');
       if (userData) setUsers(userData.map(x => mapUser(x)));
     } catch (e) {}
-
-    try {
-      const { data: reportData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
-      if (reportData) setReports(reportData.map(x => ({
-        id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
-        reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
-      })));
-    } catch (e) {}
   };
 
   useEffect(() => {
     let mounted = true;
 
     const initialize = async () => {
-      // Emergency failsafe: Unblock UI after 1.5s regardless of DB status
-      const safety = setTimeout(() => { 
-        if (mounted) {
-          setLoading(false);
-          console.debug("Initialization failsafe triggered.");
-        }
-      }, 1500);
-
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (session?.user && mounted) {
-          setIsAuthenticated(true);
-          localStorage.setItem('rojo_logged_in', 'true');
-          
           const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
           if (mounted) {
             setCurrentUser(profile);
-            setLoading(false);
-            clearTimeout(safety);
             syncDatabase();
           }
-        } else if (mounted) {
-          setIsAuthenticated(false);
-          setLoading(false);
-          clearTimeout(safety);
         }
       } catch (err) {
+        console.error("Auth Init Error:", err);
+      } finally {
         if (mounted) setLoading(false);
-        clearTimeout(safety);
       }
     };
 
@@ -172,24 +137,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
-      console.debug("Auth Event:", event);
-
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
-          setIsAuthenticated(true);
-          localStorage.setItem('rojo_logged_in', 'true');
           const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
           if (mounted) {
             setCurrentUser(profile);
-            setLoading(false);
             syncDatabase();
           }
         }
       } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        setLoading(false);
-        localStorage.removeItem('rojo_logged_in');
+        if (mounted) setCurrentUser(null);
       }
     });
 
@@ -201,19 +158,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const login = async (email: string, pass: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      if (data.session) {
+        const profile = await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
+        setCurrentUser(profile);
+        syncDatabase();
+      }
+    } finally {
       setLoading(false);
-      throw error;
     }
-    if (data.session) {
-      setIsAuthenticated(true);
-      localStorage.setItem('rojo_logged_in', 'true');
-      const profile = await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
-      setCurrentUser(profile);
-      syncDatabase();
-    }
-    setLoading(false);
   };
 
   const signup = async (username: string, email: string, pass: string) => {
@@ -237,24 +192,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/#/update-password`,
-    });
-    if (error) throw error;
-  };
-
-  const updatePassword = async (newPass: string) => {
-    const { error } = await supabase.auth.updateUser({ password: newPass });
-    if (error) throw error;
-  };
-
   const logout = async () => {
     await supabase.auth.signOut();
-    setOriginalAdmin(null);
     setCurrentUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem('rojo_logged_in');
+    setOriginalAdmin(null);
   };
 
   const loginAs = (userId: string) => {
@@ -441,10 +382,35 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <AppStateContext.Provider value={{
-      isAuthenticated, login, signup, resetPassword, updatePassword, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, 
-      toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost,
-      resolveReport, addReport
+      isAuthenticated, 
+      login, 
+      signup, 
+      resetPassword: async (email) => { await supabase.auth.resetPasswordForEmail(email); },
+      updatePassword: async (newPass) => { await supabase.auth.updateUser({ password: newPass }); },
+      logout, 
+      loginAs, 
+      revertToAdmin, 
+      originalAdmin, 
+      currentUser, 
+      users, 
+      threads, 
+      posts, 
+      reports, 
+      theme, 
+      loading,
+      toggleTheme, 
+      updateUser, 
+      updateTargetUser, 
+      banUser, 
+      unbanUser, 
+      addThread, 
+      toggleThreadPin, 
+      toggleThreadLock, 
+      deleteThread, 
+      addPost, 
+      likePost,
+      resolveReport, 
+      addReport
     }}>
       {children}
     </AppStateContext.Provider>
