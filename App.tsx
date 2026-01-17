@@ -14,15 +14,19 @@ import LoginPage from './pages/Login';
 import SignupPage from './pages/Signup';
 
 const ProtectedRoutes: React.FC = () => {
-  const { currentUser, isAuthenticated } = useAppState();
+  const { currentUser, isAuthenticated, loading } = useAppState();
   const location = useLocation();
+
+  if (loading) {
+    return <div className="min-h-screen bg-rojo-950 flex items-center justify-center text-rojo-500 font-black text-xl animate-pulse uppercase tracking-[0.5em]">Syncing...</div>;
+  }
 
   if (!isAuthenticated) {
     if (location.pathname === '/signup') return <SignupPage />;
     return <LoginPage />;
   }
 
-  if (currentUser.status === 'Banned') {
+  if (currentUser?.status === 'Banned') {
     return (
       <Routes>
         <Route path="/banned" element={<BannedPage />} />
@@ -41,8 +45,6 @@ const ProtectedRoutes: React.FC = () => {
       <Route path="/profile/:id" element={<ProfilePage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/members" element={<MembersPage />} />
-      
-      {/* Release cleanup: Remove Games/Catalog legacy routes */}
       <Route path="*" element={<HomePage />} />
     </Routes>
   );
