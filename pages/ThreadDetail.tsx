@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
 import Layout from '../components/Layout';
@@ -10,7 +10,7 @@ const ThreadDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
     threads, posts, currentUser, theme,
-    addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost 
+    addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, incrementThreadView
   } = useAppState();
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,6 +19,12 @@ const ThreadDetailPage: React.FC = () => {
   const threadPosts = posts.filter(p => p.threadId === id);
   const isDark = theme === 'dark';
   const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Moderator';
+
+  useEffect(() => {
+    if (id) {
+      incrementThreadView(id);
+    }
+  }, [id]);
 
   if (!thread) return <Layout><div className="p-20 text-center text-slate-500">Thread not found.</div></Layout>;
 

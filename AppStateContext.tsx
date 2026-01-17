@@ -4,6 +4,14 @@ import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './
 import { supabase } from './services/supabaseClient';
 import { MOCK_THREADS, MOCK_POSTS, MOCK_USERS, MOCK_REPORTS } from './constants';
 
+interface ChatMessage {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  created_at: string;
+}
+
 interface AppState {
   isAuthenticated: boolean;
   currentUser: User | null;
@@ -12,6 +20,7 @@ interface AppState {
   threads: Thread[];
   posts: Post[];
   reports: Report[];
+  chatMessages: ChatMessage[];
   theme: ThemeMode;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
@@ -27,6 +36,7 @@ interface AppState {
   banUser: (userId: string, reason: string, duration: string) => Promise<void>;
   unbanUser: (userId: string) => Promise<void>;
   addThread: (title: string, content: string, categoryId: string) => Promise<void>;
+  incrementThreadView: (threadId: string) => Promise<void>;
   toggleThreadPin: (threadId: string) => Promise<void>;
   toggleThreadLock: (threadId: string) => Promise<void>;
   deleteThread: (threadId: string) => Promise<void>;
@@ -34,6 +44,8 @@ interface AppState {
   likePost: (postId: string) => Promise<void>;
   resolveReport: (reportId: string, status: ModStatus) => Promise<void>;
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string) => Promise<void>;
+  sendChatMessage: (receiverId: string, content: string) => Promise<void>;
+  fetchChatHistory: (otherUserId: string) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
@@ -48,6 +60,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [threads, setThreads] = useState<Thread[]>(MOCK_THREADS);
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
@@ -60,12 +73,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const mapUser = (data: any): User => {
     const email = data.email || '';
     const metadata = data.user_metadata || {};
-    const isSpecial = email === 'admin@rojos.games' || metadata.username?.toLowerCase().includes('admin');
+    const username = data.username || metadata.username || 'Member';
+    const isSpecial = email === 'admin@rojos.games' || username.toLowerCase().includes('admin');
     
     return {
       id: data.id,
-      username: data.username || metadata.username || 'Member',
-      displayName: data.display_name || metadata.display_name || metadata.username || email.split('@')[0] || 'User',
+      username: username,
+      displayName: data.display_name || metadata.display_name || username || email.split('@')[0] || 'User',
       email: email,
       avatarUrl: data.avatar_url || metadata.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
       bannerUrl: data.banner_url || metadata.banner_url,
@@ -85,10 +99,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const results = await Promise.allSettled([
         supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
-        supabase.from('reports').select('*').order('created_at', { ascending: false })
+        supabase.from('reports').select('*').order('created_at', { ascending: false }),
+        supabase.from('posts').select('*, profiles(username, display_name)').order('created_at', { ascending: true })
       ]);
 
-      const [threadsRes, usersRes, reportsRes] = results as any[];
+      const [threadsRes, usersRes, reportsRes, postsRes] = results as any[];
 
       if (threadsRes.status === 'fulfilled' && threadsRes.value.data) {
         setThreads(threadsRes.value.data.map((x: any) => ({
@@ -103,19 +118,25 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (reportsRes.status === 'fulfilled' && reportsRes.value.data) {
         setReports(reportsRes.value.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
-          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+        })));
+      }
+      if (postsRes.status === 'fulfilled' && postsRes.value.data) {
+        setPosts(postsRes.value.data.map((x: any) => ({
+          id: x.id, threadId: x.thread_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
+          content: x.content, createdAt: x.created_at, likes: x.likes || 0, likedBy: x.liked_by || []
         })));
       }
     } catch (e) {
-      console.warn("Background sync incomplete.");
+      console.warn("Sync failed - background task aborted.");
     }
   };
 
-  const loadExtendedProfile = async (id: string) => {
+  const loadProfile = async (id: string) => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
       if (!error && data) {
-        setCurrentUser(mapUser(data));
+        setCurrentUser(prev => prev ? { ...prev, ...mapUser(data) } : mapUser(data));
       }
     } catch (e) {}
   };
@@ -131,36 +152,31 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (initRef.current) return;
     initRef.current = true;
 
-    // The logic below follows Supabase documentation for immediate session retrieval
+    const unlockTimer = setTimeout(() => setLoading(false), 2500);
+
     const initialize = async () => {
       try {
-        // Step 1: Check session immediately (reads from local storage/cookies)
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (session?.user) {
-          // Immediately set the user from session metadata to unlock UI
-          const mapped = mapUser(session.user);
-          setCurrentUser(mapped);
-          // Kick off background tasks
-          loadExtendedProfile(session.user.id);
+          setCurrentUser(mapUser(session.user));
+          loadProfile(session.user.id);
           syncDatabase();
         }
       } catch (err) {
-        console.error("Auth initialization failed:", err);
+        console.error("Init Error:", err);
       } finally {
-        // ALWAYS unlock the UI here
         setLoading(false);
+        clearTimeout(unlockTimer);
       }
     };
 
     initialize();
 
-    // Listener for all auth state changes (login, logout, refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setCurrentUser(mapUser(session.user));
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          loadExtendedProfile(session.user.id);
+          loadProfile(session.user.id);
           syncDatabase();
         }
         setLoading(false);
@@ -180,7 +196,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) throw error;
       if (data.user) {
         setCurrentUser(mapUser(data.user));
-        loadExtendedProfile(data.user.id);
+        loadProfile(data.user.id);
         syncDatabase();
       }
     } finally {
@@ -262,6 +278,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
+  const incrementThreadView = async (threadId: string) => {
+    try {
+      // Using direct update as RPC 'increment_thread_view' might not exist yet
+      const t = threads.find(x => x.id === threadId);
+      if (t) {
+        await supabase.from('threads').update({ view_count: (t.viewCount || 0) + 1 }).eq('id', threadId);
+      }
+    } catch (e) {}
+  };
+
   const toggleThreadPin = async (id: string) => {
     const t = threads.find(x => x.id === id);
     await supabase.from('threads').update({ is_pinned: !t?.isPinned }).eq('id', id);
@@ -283,7 +309,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!currentUser) return;
     await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
     const t = threads.find(x => x.id === threadId);
-    await supabase.from('threads').update({ reply_count: (t?.replyCount || 0) + 1 }).eq('id', threadId);
+    if (t) {
+      await supabase.from('threads').update({ reply_count: (t.replyCount || 0) + 1 }).eq('id', threadId);
+    }
     await syncDatabase();
   };
 
@@ -312,13 +340,38 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
+  const sendChatMessage = async (receiverId: string, content: string) => {
+    if (!currentUser) return;
+    const newMessage = {
+      sender_id: currentUser.id,
+      receiver_id: receiverId,
+      content,
+    };
+    const { data, error } = await supabase.from('messages').insert(newMessage).select().single();
+    if (!error && data) {
+      setChatMessages(prev => [...prev, data as ChatMessage]);
+    }
+  };
+
+  const fetchChatHistory = async (otherUserId: string) => {
+    if (!currentUser) return;
+    const { data, error } = await supabase.from('messages')
+      .select('*')
+      .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser.id})`)
+      .order('created_at', { ascending: true });
+    
+    if (!error && data) {
+      setChatMessages(data as ChatMessage[]);
+    }
+  };
+
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, resetPassword: async (e) => { await supabase.auth.resetPasswordForEmail(e); },
       updatePassword: async (p) => { await supabase.auth.updateUser({ password: p }); },
-      logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost,
-      resolveReport, addReport
+      logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, theme, loading,
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost,
+      resolveReport, addReport, sendChatMessage, fetchChatHistory
     }}>
       {children}
     </AppStateContext.Provider>
