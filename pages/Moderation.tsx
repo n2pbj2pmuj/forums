@@ -101,8 +101,8 @@ const AdminPanel: React.FC = () => {
             <table className="w-full text-left">
               <thead className={`border-b ${isDark ? 'bg-rojo-950/50 border-rojo-900/30' : 'bg-slate-50 border-slate-100'}`}>
                 <tr>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-slate-500">Target Author</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-slate-500">Content Snippet</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-slate-500">Type</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-slate-500">Target</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase text-slate-500">Reason</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase text-slate-500 text-right">Actions</th>
                 </tr>
@@ -110,36 +110,23 @@ const AdminPanel: React.FC = () => {
               <tbody className="divide-y divide-rojo-900/10">
                 {reports.map(report => (
                   <tr key={report.id} className="text-xs">
-                    <td className="px-6 py-4">
-                      <p className="font-bold">@{report.authorUsername || 'Unknown'}</p>
-                      <p className="text-[9px] text-slate-500">{report.type}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-slate-300 line-clamp-2 max-w-xs">{report.contentSnippet}</p>
-                      {report.targetUrl && (
-                        <a href={report.targetUrl} target="_blank" rel="noopener noreferrer" className="text-rojo-500 hover:underline text-[9px] font-bold uppercase mt-1 block">View Content</a>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-slate-400 font-medium">"{report.reason}"</td>
+                    <td className="px-6 py-4 font-bold">{report.type}</td>
+                    <td className="px-6 py-4">ID: {report.targetId}</td>
+                    <td className="px-6 py-4 text-slate-400">{report.reason}</td>
                     <td className="px-6 py-4 text-right">
                       {report.status === ModStatus.PENDING ? (
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => resolveReport(report.id, ModStatus.RESOLVED)} className="bg-emerald-600 text-white px-3 py-1 rounded text-[9px] font-bold uppercase transition-all hover:scale-105">Resolve</button>
-                          <button onClick={() => resolveReport(report.id, ModStatus.DISMISSED)} className="bg-slate-700 text-slate-300 px-3 py-1 rounded text-[9px] font-bold uppercase transition-all hover:scale-105">Ignore</button>
+                          <button onClick={() => resolveReport(report.id, ModStatus.RESOLVED)} className="bg-emerald-600 text-white px-3 py-1 rounded text-[9px] font-bold uppercase">Resolve</button>
+                          <button onClick={() => resolveReport(report.id, ModStatus.DISMISSED)} className="bg-slate-700 text-slate-300 px-3 py-1 rounded text-[9px] font-bold uppercase">Ignore</button>
                         </div>
                       ) : (
-                        <span className={`px-2 py-1 rounded text-[9px] font-black uppercase ${report.status === ModStatus.RESOLVED ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-500 bg-slate-500/10'}`}>{report.status}</span>
+                        <span className="text-[9px] font-bold uppercase text-slate-600">{report.status}</span>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {reports.length === 0 && (
-              <div className="p-20 text-center opacity-40">
-                <p className="text-slate-500 font-bold uppercase text-sm">No active reports</p>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -151,15 +138,15 @@ const AdminPanel: React.FC = () => {
              <div className="space-y-4">
                 <div>
                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Username</label>
-                   <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm text-white" />
+                   <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm" />
                 </div>
                 <div>
                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Email</label>
-                   <input value={editEmail} onChange={e => setEditEmail(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm text-white" />
+                   <input value={editEmail} onChange={e => setEditEmail(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm" />
                 </div>
                 <div>
                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Role</label>
-                   <select value={editRole} onChange={e => setEditRole(e.target.value as any)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm text-white">
+                   <select value={editRole} onChange={e => setEditRole(e.target.value as any)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm">
                      <option value="User">User</option>
                      <option value="Moderator">Moderator</option>
                      <option value="Admin">Admin</option>
@@ -181,11 +168,11 @@ const AdminPanel: React.FC = () => {
              <div className="space-y-4">
                 <div>
                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Reason</label>
-                   <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm text-white" rows={3} />
+                   <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm" rows={3} />
                 </div>
                 <div>
                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Duration</label>
-                   <select value={banDuration} onChange={e => setBanDuration(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm text-white">
+                   <select value={banDuration} onChange={e => setBanDuration(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-lg p-3 text-sm">
                      <option value="1">1 Day</option>
                      <option value="7">7 Days</option>
                      <option value="Permanent">Permanent</option>

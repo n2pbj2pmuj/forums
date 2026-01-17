@@ -48,8 +48,6 @@ export interface Thread {
   createdAt: string;
   replyCount: number;
   viewCount: number;
-  likes: number;
-  likedBy: string[];
   isLocked: boolean;
   isPinned: boolean;
 }
@@ -70,14 +68,13 @@ export interface Report {
   type: ReportType;
   targetId: string;
   reportedBy: string;
-  authorUsername?: string;
-  targetUrl?: string;
   reason: string;
   contentSnippet: string;
   status: ModStatus;
   createdAt: string;
 }
 
+// Added Game interface to fix import errors in pages/Games.tsx, Details.tsx, and Dashboard.tsx
 export interface Game {
   id: string;
   title: string;
@@ -89,6 +86,7 @@ export interface Game {
   description: string;
 }
 
+// Added CatalogItem interface to fix import errors in pages/Catalog.tsx and Details.tsx
 export interface CatalogItem {
   id: string;
   name: string;
