@@ -74,22 +74,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const fetchProfile = async (uid: string, email?: string) => {
-    console.log(`[Session] Syncing profile for UID: ${uid}`);
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      
       if (error || !data) {
-        console.warn("[Session] Profile missing or slow. Using defensive fallback.");
         const fallback = mapUser({ id: uid, email: email, username: email?.split('@')[0] });
         setCurrentUser(fallback);
         return fallback;
       }
-      
       const mapped = mapUser(data);
       setCurrentUser(mapped);
       return mapped;
     } catch (err) {
-      console.error("[Session] Critical profile failure:", err);
+      console.error("[Profile] Fetch failed:", err);
       const fallback = mapUser({ id: uid, email });
       setCurrentUser(fallback);
       return fallback;
@@ -140,56 +136,45 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         reason: x.reason,
         contentSnippet: x.content_snippet,
         status: x.status as ModStatus,
-        createdAt: x.created_at
+        createdAt: x.createdAt
       })));
     } catch (err) {
-      console.error("[Sync] Background database refresh failed:", err);
+      console.error("[Sync] Background refresh failed:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
+    
+    // Safety timeout: If everything hangs, clear the loading screen after 5 seconds
+    const safetyTimer = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 5000);
 
-    const initSession = async () => {
-      console.log("[Session] Initializing session check...");
+    const init = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error("[Session] Error checking stored session:", sessionError);
-        }
-
-        if (session?.user) {
-          console.log("[Session] Stored session identified. Fetching user profile...");
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && mounted) {
+          setIsAuthenticated(true);
           await fetchProfile(session.user.id, session.user.email);
-          if (mounted) setIsAuthenticated(true);
-        } else {
-          console.log("[Session] No active session found.");
         }
-        
-        // Load data in parallel, but don't block the UI if it's slow
-        syncDatabase();
+        // Always attempt background sync
+        await syncDatabase();
       } catch (err) {
-        console.error("[Session] Unhandled error during startup:", err);
+        console.error("[Init] Session check failed:", err);
       } finally {
         if (mounted) {
-          console.log("[Session] Startup complete. Unlocking UI.");
           setLoading(false);
+          clearTimeout(safetyTimer);
         }
       }
     };
 
-    initSession();
+    init();
 
-    // Reverting to the prior login logic that was stable
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[Auth] System Event: ${event}`);
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session?.user) {
-          // If we weren't already authenticated (e.g. logging in), ensure we show the loading state
-          // to prevent the router from kicking us back to login before the user state is set.
-          if (!isAuthenticated) setLoading(true);
-          
           await fetchProfile(session.user.id, session.user.email);
           if (mounted) {
             setIsAuthenticated(true);
@@ -208,13 +193,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
+      clearTimeout(safetyTimer);
     };
-  }, [isAuthenticated]);
+  }, []); // Run exactly once on mount
 
   const login = async (email: string, pass: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
-    
     if (data.session) {
       await fetchProfile(data.user.id, data.user.email);
       setIsAuthenticated(true);
@@ -225,13 +210,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data, error } = await supabase.auth.signUp({ 
       email: email, 
       password: pass,
-      options: {
-        data: { username }
-      }
+      options: { data: { username } }
     });
-
     if (error) throw error;
-
     if (data.user) {
       await supabase.from('profiles').upsert({
         id: data.user.id,
@@ -286,7 +267,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
     if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
     if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
-    
     const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
     if (!error) await fetchProfile(currentUser.id);
   };
@@ -297,7 +277,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.username !== undefined) { dbData.username = data.username; delete dbData.username; }
     if (data.email !== undefined) { dbData.email = data.email; delete dbData.email; }
     if (data.role !== undefined) { dbData.role = data.role; delete dbData.role; }
-    
     await supabase.from('profiles').update(dbData).eq('id', userId);
     await syncDatabase();
   };
@@ -360,11 +339,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const likedBy = p.likedBy || [];
     const isLiked = likedBy.includes(currentUser.id);
     const newLikedBy = isLiked ? likedBy.filter(id => id !== currentUser.id) : [...likedBy, currentUser.id];
-    
-    await supabase.from('posts').update({ 
-      liked_by: newLikedBy,
-      likes: newLikedBy.length
-    }).eq('id', postId);
+    await supabase.from('posts').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', postId);
     await syncDatabase();
   };
 
