@@ -5,7 +5,7 @@ export const CURRENT_USER: User = {
   id: 'u-admin',
   username: 'RojoAdmin',
   displayName: 'Rojo Administrator',
-  avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rojo',
+  avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=RojoAdmin',
   role: 'Admin',
   status: 'Active',
   joinDate: '2023-01-01',
@@ -13,120 +13,122 @@ export const CURRENT_USER: User = {
   themePreference: 'dark'
 };
 
+// Aliasing CURRENT_USER as ADMIN_USER for compatibility with Dashboard.tsx
 export const ADMIN_USER = CURRENT_USER;
 
 export const MOCK_USERS: User[] = [
-  { id: 'u1', username: 'TechGuru', displayName: 'John Doe', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John', role: 'User', status: 'Active', joinDate: '2023-05-10', postCount: 45, themePreference: 'dark' },
-  { id: 'u2', username: 'TrollFace', displayName: 'Anonymous', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Troll', role: 'User', status: 'Warned', joinDate: '2024-02-15', postCount: 12, themePreference: 'dark' },
-  { id: 'u3', username: 'ModSarah', displayName: 'Sarah Jenkins', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', role: 'Moderator', status: 'Active', joinDate: '2023-03-20', postCount: 890, themePreference: 'dark' }
+  { id: 'u1', username: 'ViperGrid', displayName: 'Viper', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Viper', role: 'User', status: 'Active', joinDate: '2023-05-10', postCount: 45, themePreference: 'dark' },
+  { id: 'u2', username: 'NeonProtocol', displayName: 'Neon', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Neon', role: 'User', status: 'Active', joinDate: '2024-02-15', postCount: 12, themePreference: 'dark' },
+  { id: 'u3', username: 'Mod_Sarah', displayName: 'Sarah Jenkins', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', role: 'Moderator', status: 'Active', joinDate: '2023-03-20', postCount: 890, themePreference: 'dark' }
 ];
 
 export const MOCK_CATEGORIES: ForumCategory[] = [
-  { id: 'cat1', title: 'Rojo Announcements', description: 'Official updates from the RojosGames dev team.', icon: '🔴', threadCount: 12 },
-  { id: 'cat2', title: 'Community Lounge', description: 'Hang out and chat with other members.', icon: '🍷', threadCount: 1540 },
-  { id: 'cat3', title: 'Game Development', description: 'Share your rojo-powered game projects.', icon: '🎮', threadCount: 432 },
-  { id: 'cat4', title: 'Resource Marketplace', description: 'Scripts, assets, and UI components.', icon: '📦', threadCount: 89 }
+  { id: 'cat1', title: 'Grid Announcements', description: 'Official updates from the RojosGames core team.', icon: '🔴', threadCount: 12 },
+  { id: 'cat2', title: 'Community Sector', description: 'General discussion and social sync.', icon: '🍷', threadCount: 1540 },
+  { id: 'cat3', title: 'Code Terminal', description: 'Discuss logic and Rojo scripting.', icon: '💻', threadCount: 432 }
 ];
 
 export const MOCK_THREADS: Thread[] = [
-  { id: 't1', categoryId: 'cat1', authorId: 'u-admin', authorName: 'RojoAdmin', title: 'RojosGames v3.0 Is Now Live!', content: 'The wait is over. Our new forum architecture is faster and redder than ever.', createdAt: '2024-05-01T10:00:00Z', replyCount: 24, viewCount: 1200, isLocked: false, isPinned: true },
-  { id: 't2', categoryId: 'cat2', authorId: 'u1', authorName: 'TechGuru', title: 'Best Red UI Themes for 2024?', content: 'I want to build a site that looks like this one. What CSS filters should I use?', createdAt: '2024-05-05T14:30:00Z', replyCount: 85, viewCount: 3400, isLocked: false, isPinned: false }
+  { id: 't1', categoryId: 'cat1', authorId: 'u-admin', authorName: 'RojoAdmin', title: 'RojosGames V2: Architecture Overhaul', content: 'Our new grid system is now fully synchronized with the red protocol.', createdAt: '2024-05-01T10:00:00Z', replyCount: 24, viewCount: 1200, isLocked: false, isPinned: true },
+  { id: 't2', categoryId: 'cat2', authorId: 'u1', authorName: 'ViperGrid', title: 'Best Cyber-Red UI Components?', content: 'Seeking the sharpest UI kits for my next project. Any recommendations?', createdAt: '2024-05-05T14:30:00Z', replyCount: 85, viewCount: 3400, isLocked: false, isPinned: false }
 ];
 
 export const MOCK_POSTS: Post[] = [
-  { id: 'p1', threadId: 't2', authorId: 'u3', authorName: 'ModSarah', content: 'Try using backdrop-blur and a subtle red overlay.', createdAt: '2024-05-05T15:00:00Z', likes: 12, likedBy: [] },
-  { id: 'p2', threadId: 't2', authorId: 'u2', authorName: 'TrollFace', content: 'Just make everything red. Simple.', createdAt: '2024-05-05T16:20:00Z', likes: -2, likedBy: [] }
+  { id: 'p1', threadId: 't2', authorId: 'u3', authorName: 'Mod_Sarah', content: 'Check the Code Terminal for the latest Rojo UI primitives.', createdAt: '2024-05-05T15:00:00Z', likes: 12, likedBy: [] }
 ];
 
 export const MOCK_REPORTS: Report[] = [
-  { id: 'r1', type: ReportType.POST, targetId: 'p2', reportedBy: 'u1', reason: 'Low effort/Spam', contentSnippet: 'Just make everything red...', status: ModStatus.PENDING, createdAt: '2024-05-05T17:00:00Z' },
-  { id: 'r2', type: ReportType.USER, targetId: 'u2', reportedBy: 'u3', reason: 'Repeated community violations', contentSnippet: 'User Profile: TrollFace', status: ModStatus.PENDING, createdAt: '2024-05-06T09:15:00Z' }
+  { id: 'r1', type: ReportType.POST, targetId: 'p1', reportedBy: 'u2', reason: 'False Information', contentSnippet: 'Check the Code Terminal...', status: ModStatus.PENDING, createdAt: '2024-05-05T17:00:00Z' }
 ];
 
-// Added MOCK_GAMES for discovery and dashboard pages
+/**
+ * Mock data for the games section.
+ */
 export const MOCK_GAMES: Game[] = [
   {
-    id: 'g-1',
-    title: 'Neon Drift',
-    description: 'High-speed racing through a red-soaked cyberpunk city.',
-    thumbnail: 'https://picsum.photos/seed/ndrift/800/600',
-    creatorName: 'RojoStudios',
+    id: 'g1',
+    title: 'Neon Drift: Overdrive',
+    thumbnail: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80',
     activePlayers: 4500,
-    rating: 95,
-    visits: 12000000
+    rating: 92,
+    creatorName: 'CyberRojo',
+    visits: 1200000,
+    description: 'High-speed racing in a cyberpunk wasteland. Sync your drift and dominate the grid.'
   },
   {
-    id: 'g-2',
-    title: 'Crimson Conquest',
-    description: 'Battle for territory in this strategic military simulator.',
-    thumbnail: 'https://picsum.photos/seed/cconq/800/600',
-    creatorName: 'WarLord_Games',
+    id: 'g2',
+    title: 'Grid Breaker',
+    thumbnail: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&w=800&q=80',
     activePlayers: 1200,
     rating: 88,
-    visits: 3400000
+    creatorName: 'NeonForge',
+    visits: 450000,
+    description: 'Break the code, solve the puzzles, and escape the digital labyrinth.'
   },
   {
-    id: 'g-3',
-    title: 'Red Block Obby',
-    description: 'Can you survive the 500 levels of red-hot parkour?',
-    thumbnail: 'https://picsum.photos/seed/obby/800/600',
-    creatorName: 'ParkourMaster',
-    activePlayers: 850,
-    rating: 82,
-    visits: 1500000
+    id: 'g3',
+    title: 'Red Protocol: Warzone',
+    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
+    activePlayers: 8900,
+    rating: 95,
+    creatorName: 'WarMaster',
+    visits: 5600000,
+    description: 'The ultimate tactical shooter. Protect the core from hostile entities.'
   },
   {
-    id: 'g-4',
-    title: 'Blox-a-Rojo',
-    description: 'The ultimate social experience in a virtual red world.',
-    thumbnail: 'https://picsum.photos/seed/blox/800/600',
-    creatorName: 'SocialDevs',
-    activePlayers: 3200,
-    rating: 91,
-    visits: 25000000
+    id: 'g4',
+    title: 'Byte City Life',
+    thumbnail: 'https://images.unsplash.com/photo-1605898835518-22020fa502c4?auto=format&fit=crop&w=800&q=80',
+    activePlayers: 2300,
+    rating: 85,
+    creatorName: 'PixelWorld',
+    visits: 890000,
+    description: 'Live your best digital life in Byte City. Trade assets, build homes, and socialize.'
   }
 ];
 
-// Added MOCK_CATALOG for avatar shop and item details pages
+/**
+ * Mock data for the avatar shop catalog.
+ */
 export const MOCK_CATALOG: CatalogItem[] = [
   {
-    id: 'i-1',
-    name: 'Cybernetic Red Visor',
-    description: 'A tactical visor with advanced red-spectrum HUD.',
-    thumbnail: 'https://picsum.photos/seed/visor/400/400',
-    creatorName: 'CyberGear',
-    price: 450,
-    type: 'Hat',
-    isLimited: true
-  },
-  {
-    id: 'i-2',
-    name: 'Crimson Wings of Valor',
-    description: 'Legendary wings that signify immense bravery.',
-    thumbnail: 'https://picsum.photos/seed/wings/400/400',
-    creatorName: 'MythicItems',
-    price: 15000,
+    id: 'i1',
+    name: 'Cyber-Visor V1',
+    thumbnail: 'https://images.unsplash.com/photo-1573164713988-89a51150c221?auto=format&fit=crop&w=400&q=80',
     type: 'Accessory',
-    isLimited: true
+    creatorName: 'RojoGear',
+    price: 450,
+    isLimited: true,
+    description: 'Enhanced vision for the digital frontier. Features real-time grid mapping.'
   },
   {
-    id: 'i-3',
-    name: 'Rojo Developer Hoodie',
-    description: 'The official hoodie for RojosGames developers.',
-    thumbnail: 'https://picsum.photos/seed/hoodie/400/400',
-    creatorName: 'RojoGames',
-    price: 0,
+    id: 'i2',
+    name: 'Red Grid Suit',
+    thumbnail: 'https://images.unsplash.com/photo-1539533113208-f6df8cc8b543?auto=format&fit=crop&w=400&q=80',
     type: 'Shirt',
-    isLimited: false
+    creatorName: 'StyleSync',
+    price: 0,
+    isLimited: false,
+    description: 'Standard issue attire for the elite members of the Rojo community. Durable and stylish.'
   },
   {
-    id: 'i-4',
-    name: 'Plasma Sword',
-    description: 'A glowing energy blade capable of cutting through any block.',
-    thumbnail: 'https://picsum.photos/seed/sword/400/400',
-    creatorName: 'Futurist',
-    price: 800,
+    id: 'i3',
+    name: 'Neon Katana',
+    thumbnail: 'https://images.unsplash.com/photo-1589131842235-98317a781566?auto=format&fit=crop&w=400&q=80',
     type: 'Gear',
-    isLimited: false
+    creatorName: 'BladeRunner',
+    price: 1500,
+    isLimited: true,
+    description: 'A sharp blade for a sharp mind. Cuts through data streams with ease. Emits a red glow.'
+  },
+  {
+    id: 'i4',
+    name: 'Sync-Helmet',
+    thumbnail: 'https://images.unsplash.com/photo-1544652478-6653e09f18a2?auto=format&fit=crop&w=400&q=80',
+    type: 'Hat',
+    creatorName: 'RojoGear',
+    price: 300,
+    isLimited: false,
+    description: 'Protect your neural link with this reinforced sync-helmet. Standard protection for all citizens.'
   }
 ];

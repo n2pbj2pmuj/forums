@@ -71,7 +71,6 @@ export interface SiteAsset {
   isActive: boolean;
 }
 
-// Added missing Report interface
 export interface Report {
   id: string;
   type: ReportType;
@@ -83,26 +82,30 @@ export interface Report {
   createdAt: string;
 }
 
-// Added missing Game interface
+/**
+ * Interface representing a game in the platform.
+ */
 export interface Game {
   id: string;
   title: string;
-  description: string;
   thumbnail: string;
-  creatorName: string;
   activePlayers: number;
   rating: number;
+  creatorName: string;
   visits: number;
+  description: string;
 }
 
-// Added missing CatalogItem interface
+/**
+ * Interface representing an item in the avatar shop catalog.
+ */
 export interface CatalogItem {
   id: string;
   name: string;
-  description: string;
   thumbnail: string;
+  type: string;
   creatorName: string;
   price: number;
-  type: string;
   isLimited: boolean;
+  description: string;
 }

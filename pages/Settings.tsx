@@ -19,64 +19,70 @@ const SettingsPage: React.FC = () => {
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto space-y-8">
-        <h1 className="text-4xl font-black tracking-tight">Account Settings</h1>
+      <div className="max-w-3xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-500">
+        <div>
+          <h1 className="text-5xl font-black tracking-tighter uppercase">GRID CONFIG</h1>
+          <p className="text-rojo-500 font-bold uppercase text-xs tracking-[0.3em] mt-2">Adjust your identity parameters</p>
+        </div>
 
-        <div className={`border rounded-3xl p-8 transition-all ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <div className="space-y-8">
+        <div className={`border rounded-[2.5rem] p-10 shadow-2xl transition-all ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
+          <div className="space-y-10">
             {/* Visuals */}
-            <section className="space-y-4">
-              <h3 className="font-black uppercase text-xs tracking-widest text-slate-500">Preferences</h3>
-              <div className="flex items-center justify-between">
+            <section className="space-y-6">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-500">Interface Preference</h3>
+              <div className="flex items-center justify-between p-6 rounded-3xl bg-rojo-950/20 border border-rojo-900/10">
                 <div>
-                  <p className="font-bold">Interface Theme</p>
-                  <p className="text-xs text-slate-500">Toggle between Cyber-Dark and Classic-Light</p>
+                  <p className="font-black text-lg">System Modality</p>
+                  <p className="text-xs text-slate-500 font-medium">Switch between Cyber-Red and High-Contrast Light</p>
                 </div>
                 <button 
                   onClick={toggleTheme}
-                  className={`px-6 py-2 rounded-xl font-bold transition-all border ${isDark ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
+                  className={`px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all border ${isDark ? 'bg-rojo-600 border-rojo-500 text-white hover:bg-rojo-500 shadow-lg shadow-rojo-900/30' : 'bg-rojo-50 border-rojo-100 text-rojo-600'}`}
                 >
-                  {isDark ? 'Switch to Light' : 'Switch to Dark'}
+                  {isDark ? 'Sync Light' : 'Sync Dark'}
                 </button>
               </div>
             </section>
 
-            <div className={`h-[1px] ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+            <div className={`h-[1px] ${isDark ? 'bg-rojo-900/10' : 'bg-slate-100'}`}></div>
 
             {/* Profile Info */}
-            <section className="space-y-6">
-              <h3 className="font-black uppercase text-xs tracking-widest text-slate-500">Profile Information</h3>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Display Name</label>
-                <input 
-                  type="text" 
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 ring-indigo-500 border transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'}`}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Bio / About Me</label>
-                <textarea 
-                  value={about}
-                  onChange={(e) => setAbout(e.target.value)}
-                  className={`w-full h-32 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ring-indigo-500 border transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'}`}
-                  placeholder="Tell the community about yourself..."
-                />
+            <section className="space-y-8">
+              <h3 className="font-black uppercase text-[10px] tracking-widest text-slate-500">Identity Details</h3>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest ml-1">Visible Alias</label>
+                  <input 
+                    type="text" 
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className={`w-full rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:ring-2 ring-rojo-500 border transition-all ${isDark ? 'bg-rojo-950/50 border-rojo-900/30 text-white' : 'bg-rojo-50 border-rojo-100'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest ml-1">Identity Abstract (Bio)</label>
+                  <textarea 
+                    value={about}
+                    onChange={(e) => setAbout(e.target.value)}
+                    className={`w-full h-40 rounded-2xl px-6 py-4 text-sm font-medium outline-none focus:ring-2 ring-rojo-500 border transition-all leading-relaxed ${isDark ? 'bg-rojo-950/50 border-rojo-900/30 text-white' : 'bg-rojo-50 border-rojo-100'}`}
+                    placeholder="Describe your role in the grid..."
+                  />
+                </div>
               </div>
             </section>
 
             <div className="flex justify-end pt-4">
               <button 
                 onClick={handleSave}
-                className={`px-10 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${saved ? 'bg-emerald-600 text-white' : (isDark ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700')}`}
+                disabled={saved}
+                className={`px-12 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center gap-3 shadow-xl ${saved ? 'bg-emerald-600 text-white scale-105' : 'bg-rojo-600 hover:bg-rojo-500 text-white shadow-rojo-900/40'}`}
               >
                 {saved ? (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    Saved Successfully
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                    Parameters Cached
                   </>
-                ) : 'Save Changes'}
+                ) : 'Update Grid Identity'}
               </button>
             </div>
           </div>
