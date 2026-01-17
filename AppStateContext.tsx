@@ -38,6 +38,16 @@ interface AppState {
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
 
+// Synchronous check for session hint
+const getSessionHint = () => {
+  try {
+    const keys = Object.keys(localStorage);
+    return keys.some(key => key.includes('auth-token')) || localStorage.getItem('rojo_logged_in') === 'true';
+  } catch (e) {
+    return false;
+  }
+};
+
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -89,35 +99,20 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const syncDatabase = async () => {
-    // Individual fetches to prevent table 404s from breaking the app
     try {
       const { data: threadData } = await supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false });
       if (threadData) setThreads(threadData.map(x => ({
-        id: x.id,
-        categoryId: x.category_id,
-        authorId: x.author_id,
-        authorName: x.profiles?.username || 'Unknown',
-        title: x.title,
-        content: x.content,
-        createdAt: x.created_at,
-        replyCount: x.reply_count || 0,
-        viewCount: x.view_count || 0,
-        isLocked: x.is_locked || false,
-        isPinned: x.is_pinned || false
+        id: x.id, categoryId: x.category_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
+        title: x.title, content: x.content, createdAt: x.created_at, replyCount: x.reply_count || 0,
+        viewCount: x.view_count || 0, isLocked: x.is_locked || false, isPinned: x.is_pinned || false
       })));
     } catch (e) {}
 
     try {
       const { data: postData } = await supabase.from('posts').select('*, profiles(username, display_name)');
       if (postData) setPosts(postData.map(x => ({
-        id: x.id,
-        threadId: x.thread_id,
-        authorId: x.author_id,
-        authorName: x.profiles?.username || 'Unknown',
-        content: x.content,
-        createdAt: x.created_at,
-        likes: x.likes || 0,
-        likedBy: x.liked_by || []
+        id: x.id, threadId: x.thread_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
+        content: x.content, createdAt: x.created_at, likes: x.likes || 0, likedBy: x.liked_by || []
       })));
     } catch (e) {}
 
@@ -129,14 +124,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { data: reportData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
       if (reportData) setReports(reportData.map(x => ({
-        id: x.id,
-        type: x.type as ReportType,
-        targetId: x.target_id,
-        reportedBy: x.reported_by,
-        reason: x.reason,
-        content_snippet: x.content_snippet,
-        status: x.status as ModStatus,
-        createdAt: x.created_at
+        id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
+        reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
       })));
     } catch (e) {}
   };
@@ -145,41 +134,32 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let mounted = true;
 
     const initialize = async () => {
-      // 1. Force unblock UI if something hangs
-      const safety = setTimeout(() => { if (mounted) setLoading(false); }, 2000);
+      // Emergency failsafe: Unblock UI after 1.5s regardless of DB status
+      const safety = setTimeout(() => { 
+        if (mounted) {
+          setLoading(false);
+          console.debug("Initialization failsafe triggered.");
+        }
+      }, 1500);
 
       try {
-        // 2. Check for existing session
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user && mounted) {
-          // 3. Mark as authenticated immediately
           setIsAuthenticated(true);
+          localStorage.setItem('rojo_logged_in', 'true');
           
-          // 4. Create an immediate "Metadata User" so the UI doesn't show placeholders
-          const tempUser = mapUser({ 
-            id: session.user.id, 
-            email: session.user.email,
-            user_metadata: session.user.user_metadata 
-          });
-          setCurrentUser(tempUser);
-          
-          // 5. Unblock UI
-          setLoading(false);
-          clearTimeout(safety);
-
-          // 6. Refine with real DB data in background
-          const fullUser = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
+          const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
           if (mounted) {
-            setCurrentUser(fullUser);
-            syncDatabase();
-          }
-        } else {
-          if (mounted) {
-            setIsAuthenticated(false);
+            setCurrentUser(profile);
             setLoading(false);
             clearTimeout(safety);
+            syncDatabase();
           }
+        } else if (mounted) {
+          setIsAuthenticated(false);
+          setLoading(false);
+          clearTimeout(safety);
         }
       } catch (err) {
         if (mounted) setLoading(false);
@@ -192,16 +172,24 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
+      console.debug("Auth Event:", event);
+
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
           setIsAuthenticated(true);
+          localStorage.setItem('rojo_logged_in', 'true');
           const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
-          setCurrentUser(profile);
-          syncDatabase();
+          if (mounted) {
+            setCurrentUser(profile);
+            setLoading(false);
+            syncDatabase();
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        setLoading(false);
+        localStorage.removeItem('rojo_logged_in');
       }
     });
 
@@ -220,6 +208,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     if (data.session) {
       setIsAuthenticated(true);
+      localStorage.setItem('rojo_logged_in', 'true');
       const profile = await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
       setCurrentUser(profile);
       syncDatabase();
@@ -265,6 +254,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setOriginalAdmin(null);
     setCurrentUser(null);
     setIsAuthenticated(false);
+    localStorage.removeItem('rojo_logged_in');
   };
 
   const loginAs = (userId: string) => {
@@ -350,16 +340,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (e) {
       const newT: Thread = {
         id: Math.random().toString(36).substr(2, 9),
-        categoryId,
-        authorId: currentUser.id,
-        authorName: currentUser.username,
-        title,
-        content,
-        createdAt: new Date().toISOString(),
-        replyCount: 0,
-        viewCount: 0,
-        isLocked: false,
-        isPinned: false
+        categoryId, authorId: currentUser.id, authorName: currentUser.username,
+        title, content, createdAt: new Date().toISOString(), replyCount: 0,
+        viewCount: 0, isLocked: false, isPinned: false
       };
       setThreads([newT, ...threads]);
     }
@@ -398,23 +381,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!currentUser) return;
     try {
       await supabase.from('posts').insert({
-        thread_id: threadId,
-        author_id: currentUser.id,
-        content
+        thread_id: threadId, author_id: currentUser.id, content
       });
       const t = threads.find(x => x.id === threadId);
       await supabase.from('threads').update({ reply_count: (t?.replyCount || 0) + 1 }).eq('id', threadId);
       await syncDatabase();
     } catch (e) {
       const newP: Post = {
-        id: Math.random().toString(36).substr(2, 9),
-        threadId,
-        authorId: currentUser.id,
-        authorName: currentUser.username,
-        content,
-        createdAt: new Date().toISOString(),
-        likes: 0,
-        likedBy: []
+        id: Math.random().toString(36).substr(2, 9), threadId, authorId: currentUser.id,
+        authorName: currentUser.username, content, createdAt: new Date().toISOString(),
+        likes: 0, likedBy: []
       };
       setPosts([...posts, newP]);
       setThreads(threads.map(t => t.id === threadId ? { ...t, replyCount: t.replyCount + 1 } : t));
@@ -450,24 +426,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!currentUser) return;
     try {
       await supabase.from('reports').insert({
-        type,
-        target_id: targetId,
-        reported_by: currentUser.username,
-        reason,
-        content_snippet: contentSnippet,
-        status: ModStatus.PENDING
+        type, target_id: targetId, reported_by: currentUser.username,
+        reason, content_snippet: contentSnippet, status: ModStatus.PENDING
       });
       await syncDatabase();
     } catch (e) {
       const newR: Report = {
-        id: Math.random().toString(36).substr(2, 9),
-        type,
-        targetId,
-        reportedBy: currentUser.username,
-        reason,
-        contentSnippet,
-        status: ModStatus.PENDING,
-        createdAt: new Date().toISOString()
+        id: Math.random().toString(36).substr(2, 9), type, targetId, reportedBy: currentUser.username,
+        reason, contentSnippet, status: ModStatus.PENDING, createdAt: new Date().toISOString()
       };
       setReports([newR, ...reports]);
     }
