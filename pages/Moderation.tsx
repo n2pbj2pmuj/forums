@@ -39,13 +39,13 @@ const AdminPanel: React.FC = () => {
     <Layout>
       <div className="space-y-6 animate-in fade-in duration-500">
         <header>
-          <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Moderation Console</h1>
-          <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-widest mt-1">Platform Operations & Safety</p>
+          <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Moderation Panel</h1>
+          <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-widest mt-1">Manage Users & Content</p>
         </header>
 
         <div className={`flex border-b overflow-x-auto no-scrollbar ${isDark ? 'border-rojo-900/50' : 'border-rojo-100'}`}>
-          <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>Member Database</TabButton>
-          <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>Reports Queue</TabButton>
+          <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>Users</TabButton>
+          <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>Reports</TabButton>
         </div>
 
         {activeTab === 'users' && (
@@ -68,10 +68,10 @@ const AdminPanel: React.FC = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => { setEditingUserId(user.id); setEditEmail(user.email); setEditRole(user.role); setEditUsername(user.username); }} className="py-2 rounded-lg font-bold uppercase text-[9px] bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Edit Roles</button>
+                  <button onClick={() => { setEditingUserId(user.id); setEditEmail(user.email); setEditRole(user.role); setEditUsername(user.username); }} className="py-2 rounded-lg font-bold uppercase text-[9px] bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Edit Rank</button>
                   <button onClick={() => { loginAs(user.id); navigate('/'); }} className="bg-slate-200 text-black font-bold uppercase text-[9px] py-2 rounded-lg hover:bg-white transition-colors">Login As</button>
                   {user.status === 'Banned' ? (
-                    <button onClick={() => unbanUser(user.id)} className="bg-emerald-600 text-white font-bold uppercase text-[9px] py-2 rounded-lg hover:bg-emerald-500 transition-colors">Restore</button>
+                    <button onClick={() => unbanUser(user.id)} className="bg-emerald-600 text-white font-bold uppercase text-[9px] py-2 rounded-lg hover:bg-emerald-500 transition-colors">Unban</button>
                   ) : (
                     <button onClick={() => setShowBanModal(user.id)} className="bg-rojo-600 text-white font-bold uppercase text-[9px] py-2 rounded-lg hover:bg-rojo-500 transition-colors">Ban</button>
                   )}
@@ -86,9 +86,9 @@ const AdminPanel: React.FC = () => {
             <table className="w-full text-left">
               <thead className={`border-b ${isDark ? 'bg-rojo-950/50 border-rojo-900/30' : 'bg-slate-50 border-slate-100'}`}>
                 <tr className="text-[10px] uppercase font-bold text-slate-500">
-                  <th className="px-6 py-4">Target Author</th>
-                  <th className="px-6 py-4">Content Context</th>
-                  <th className="px-6 py-4">Violation Type</th>
+                  <th className="px-6 py-4">Author</th>
+                  <th className="px-6 py-4">Snippet</th>
+                  <th className="px-6 py-4">Reason</th>
                   <th className="px-6 py-4 text-right">Action</th>
                 </tr>
               </thead>
@@ -97,12 +97,11 @@ const AdminPanel: React.FC = () => {
                   <tr key={report.id} className="text-xs group hover:bg-rojo-500/5 transition-colors">
                     <td className="px-6 py-4">
                       <p className="font-bold">@{report.authorUsername || 'Unknown'}</p>
-                      <p className="text-[9px] text-slate-500">Target ID: {report.targetId.substring(0,8)}...</p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className={`line-clamp-2 max-w-xs italic mb-2 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>"{report.contentSnippet || 'No snippet available'}"</p>
+                      <p className={`line-clamp-2 max-w-xs italic mb-2 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>"{report.contentSnippet || 'N/A'}"</p>
                       {report.targetUrl && (
-                        <a href={report.targetUrl} target="_blank" rel="noopener noreferrer" className="text-rojo-500 text-[9px] font-black uppercase hover:underline">View Live Context</a>
+                        <a href={report.targetUrl} target="_blank" rel="noopener noreferrer" className="text-rojo-500 text-[9px] font-black uppercase hover:underline">View Post</a>
                       )}
                     </td>
                     <td className="px-6 py-4">
@@ -113,7 +112,7 @@ const AdminPanel: React.FC = () => {
                       {report.status === ModStatus.PENDING ? (
                         <div className="flex justify-end gap-2">
                           <button onClick={() => resolveReport(report.id, ModStatus.RESOLVED)} className="bg-emerald-600 text-white px-3 py-1.5 rounded text-[9px] font-bold uppercase shadow-lg shadow-emerald-900/20 hover:scale-105 transition-all">Resolve</button>
-                          <button onClick={() => resolveReport(report.id, ModStatus.DISMISSED)} className="bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-[9px] font-bold uppercase hover:bg-slate-600 transition-all">Ignore</button>
+                          <button onClick={() => resolveReport(report.id, ModStatus.DISMISSED)} className="bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-[9px] font-bold uppercase hover:bg-slate-600 transition-all">Dismiss</button>
                         </div>
                       ) : (
                         <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${report.status === ModStatus.RESOLVED ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-500 bg-slate-500/10'}`}>{report.status}</span>
@@ -125,7 +124,7 @@ const AdminPanel: React.FC = () => {
             </table>
             {reports.length === 0 && (
               <div className="p-20 text-center opacity-30">
-                <p className="text-slate-500 font-bold uppercase text-xs tracking-[0.2em]">Reports Queue Empty</p>
+                <p className="text-slate-500 font-bold uppercase text-xs tracking-[0.2em]">Queue Empty</p>
               </div>
             )}
           </div>
@@ -135,24 +134,24 @@ const AdminPanel: React.FC = () => {
       {editingUserId && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className={`w-full max-w-lg rounded-2xl p-10 border shadow-2xl ${isDark ? 'bg-rojo-950 border-rojo-500/30' : 'bg-white border-slate-200'}`}>
-             <h2 className="text-2xl font-black uppercase mb-8 text-rojo-500 tracking-tighter">Permission Protocol</h2>
+             <h2 className="text-2xl font-black uppercase mb-8 text-rojo-500 tracking-tighter">Edit User Details</h2>
              <div className="space-y-6">
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Identify Username</label>
+                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Username</label>
                    <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className={`w-full border rounded-xl p-4 text-sm transition-all outline-none focus:ring-2 ring-rojo-500 ${isDark ? 'bg-black border-rojo-900/50 text-white' : 'bg-slate-50 border-slate-200'}`} />
                 </div>
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Account Rank</label>
+                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Role</label>
                    <select value={editRole} onChange={e => setEditRole(e.target.value as any)} className={`w-full border rounded-xl p-4 text-sm transition-all outline-none focus:ring-2 ring-rojo-500 ${isDark ? 'bg-black border-rojo-900/50 text-white' : 'bg-slate-50 border-slate-200'}`}>
-                     <option value="User">Standard Member</option>
-                     <option value="Moderator">Community Moderator</option>
-                     <option value="Admin">System Administrator</option>
+                     <option value="User">User</option>
+                     <option value="Moderator">Moderator</option>
+                     <option value="Admin">Admin</option>
                    </select>
                 </div>
              </div>
              <div className="mt-10 flex gap-4">
-               <button onClick={() => setEditingUserId(null)} className="flex-1 text-slate-500 font-bold uppercase text-xs tracking-widest py-4">Abort</button>
-               <button onClick={handleRoleUpdate} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-rojo-500/20 hover:bg-rojo-500 transition-all">Update Rank</button>
+               <button onClick={() => setEditingUserId(null)} className="flex-1 text-slate-500 font-bold uppercase text-xs tracking-widest py-4">Cancel</button>
+               <button onClick={handleRoleUpdate} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-rojo-500/20 hover:bg-rojo-500 transition-all">Update</button>
              </div>
           </div>
         </div>
@@ -160,25 +159,25 @@ const AdminPanel: React.FC = () => {
 
       {showBanModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[300] flex items-center justify-center p-6 animate-in zoom-in duration-200">
-          <div className="w-full max-w-lg rounded-3xl p-10 border bg-[#0a0202] border-rojo-500/30 shadow-[0_0_100px_rgba(255,0,0,0.15)]">
-             <h2 className="text-2xl font-black uppercase mb-8 text-rojo-500 tracking-tight">Access Isolation Protocol</h2>
+          <div className="w-full max-w-lg rounded-3xl p-10 border bg-[#0a0202] border-rojo-500/30 shadow-2xl">
+             <h2 className="text-2xl font-black uppercase mb-8 text-rojo-500 tracking-tight">Ban User</h2>
              <div className="space-y-6">
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Isolation Reason</label>
-                   <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-2xl p-5 text-sm text-white outline-none focus:ring-2 ring-rojo-500 transition-all" rows={4} placeholder="Specify violation code..." />
+                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Ban Reason</label>
+                   <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-2xl p-5 text-sm text-white outline-none focus:ring-2 ring-rojo-500 transition-all" rows={4} placeholder="Enter reason..." />
                 </div>
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Isolation Duration</label>
+                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Duration</label>
                    <select value={banDuration} onChange={e => setBanDuration(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-xl p-4 text-sm text-white outline-none focus:ring-2 ring-rojo-500">
-                     <option value="1">1 Solar Day</option>
-                     <option value="7">7 Solar Days</option>
-                     <option value="Permanent">Permanent Archival</option>
+                     <option value="1">1 Day</option>
+                     <option value="7">7 Days</option>
+                     <option value="Permanent">Permanent</option>
                    </select>
                 </div>
              </div>
              <div className="mt-10 flex gap-4">
                <button onClick={() => setShowBanModal(null)} className="flex-1 text-slate-500 font-bold uppercase text-xs tracking-widest">Cancel</button>
-               <button onClick={handleBan} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest hover:bg-rojo-500 shadow-[0_0_20px_rgba(255,0,0,0.3)] transition-all">Apply Isolation</button>
+               <button onClick={handleBan} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest hover:bg-rojo-500 transition-all shadow-xl shadow-rojo-900/20">Apply Ban</button>
              </div>
           </div>
         </div>

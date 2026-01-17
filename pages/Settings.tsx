@@ -6,13 +6,14 @@ import Layout from '../components/Layout';
 const SettingsPage: React.FC = () => {
   const { currentUser, updateUser, theme, toggleTheme } = useAppState();
   const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
+  const [avatarUrl, setAvatarUrl] = useState(currentUser?.avatarUrl || '');
   const [about, setAbout] = useState(currentUser?.about || '');
   const [saved, setSaved] = useState(false);
 
   const isDark = theme === 'dark';
 
   const handleSave = () => {
-    updateUser({ displayName, about });
+    updateUser({ displayName, avatarUrl, about });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -21,18 +22,18 @@ const SettingsPage: React.FC = () => {
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
         <header>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Account Settings</h1>
-          <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-widest mt-1">Manage your forum presence</p>
+          <h1 className="text-3xl font-black tracking-tight uppercase">Settings</h1>
+          <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-widest mt-1">Manage your profile</p>
         </header>
 
         <div className={`border rounded-2xl p-8 shadow-xl ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-slate-200'}`}>
           <div className="space-y-8">
             <section className="space-y-4">
-              <h3 className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Apperance</h3>
+              <h3 className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Appearance</h3>
               <div className="flex items-center justify-between p-5 rounded-xl bg-slate-800/20 border border-slate-800/30">
                 <div>
                   <p className="font-bold">Dark Mode</p>
-                  <p className="text-[11px] text-slate-500">Toggle the visual theme of the forum</p>
+                  <p className="text-[11px] text-slate-500">Toggle site theme</p>
                 </div>
                 <button 
                   onClick={toggleTheme}
@@ -44,7 +45,7 @@ const SettingsPage: React.FC = () => {
             </section>
 
             <section className="space-y-6">
-              <h3 className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Public Info</h3>
+              <h3 className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Profile Information</h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Display Name</label>
@@ -54,6 +55,17 @@ const SettingsPage: React.FC = () => {
                     onChange={(e) => setDisplayName(e.target.value)}
                     className={`w-full rounded-lg px-4 py-3 text-sm border outline-none focus:ring-1 ring-rojo-500 ${isDark ? 'bg-rojo-950 border-rojo-900/30 text-white' : 'bg-slate-50 border-slate-200'}`}
                   />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Avatar Image URL</label>
+                  <input 
+                    type="text" 
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    placeholder="https://example.com/image.png"
+                    className={`w-full rounded-lg px-4 py-3 text-sm border outline-none focus:ring-1 ring-rojo-500 ${isDark ? 'bg-rojo-950 border-rojo-900/30 text-white' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 italic">Paste a link to any image to change your profile picture.</p>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Biography</label>
@@ -73,7 +85,7 @@ const SettingsPage: React.FC = () => {
                 disabled={saved}
                 className={`px-8 py-3 rounded-lg font-bold uppercase text-xs transition-all ${saved ? 'bg-emerald-600 text-white' : 'bg-rojo-600 text-white hover:bg-rojo-500'}`}
               >
-                {saved ? 'Settings Saved' : 'Save Changes'}
+                {saved ? 'Changes Saved' : 'Save Changes'}
               </button>
             </div>
           </div>

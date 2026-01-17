@@ -78,22 +78,24 @@ export interface Report {
   createdAt: string;
 }
 
+// Fixed missing Game interface for Games.tsx and Details.tsx
 export interface Game {
   id: string;
   title: string;
   thumbnail: string;
   activePlayers: number;
-  rating: number;
   creatorName: string;
+  rating: number;
   visits: number;
   description: string;
 }
 
+// Fixed missing CatalogItem interface for Catalog.tsx and Details.tsx
 export interface CatalogItem {
   id: string;
   name: string;
-  type: 'Hat' | 'Shirt' | 'Gear' | 'Accessory';
   thumbnail: string;
+  type: string;
   isLimited: boolean;
   creatorName: string;
   price: number;

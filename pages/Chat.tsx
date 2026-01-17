@@ -13,7 +13,6 @@ const ChatPage: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
-  // Contacts: Users we've messaged OR the user we were referred to from a profile click
   const filteredContacts = useMemo(() => {
     return users.filter(u => {
       const isMe = u.id === currentUser?.id;
@@ -50,7 +49,7 @@ const ChatPage: React.FC = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center h-[700px] border border-dashed border-rojo-900/30 rounded-[2.5rem] opacity-30">
-          <p className="font-black uppercase tracking-widest text-xs">No Active Transmissions</p>
+          <p className="font-black uppercase tracking-widest text-xs">No Messages Yet</p>
         </div>
       </Layout>
     );
@@ -61,7 +60,7 @@ const ChatPage: React.FC = () => {
       <div className={`border rounded-[2.5rem] overflow-hidden shadow-[0_0_50px_rgba(255,0,0,0.05)] h-[700px] flex transition-all ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
         <aside className={`w-80 flex flex-col border-r transition-all ${isDark ? 'border-rojo-900/20 bg-rojo-950/20' : 'border-slate-100 bg-slate-50/50'}`}>
           <div className="p-6 border-b border-rojo-900/10">
-            <h2 className="text-xs font-black uppercase tracking-[0.3em] text-rojo-500 mb-4">Direct Messages</h2>
+            <h2 className="text-xs font-black uppercase tracking-[0.3em] text-rojo-500 mb-4">Messages</h2>
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar">
             {filteredContacts.map(user => (
@@ -87,7 +86,7 @@ const ChatPage: React.FC = () => {
                   <img src={selectedUser.avatarUrl} className="w-10 h-10 rounded-2xl border border-rojo-900/30" alt="" />
                   <div>
                     <p className="text-lg font-black tracking-tighter">{selectedUser.displayName}</p>
-                    <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Active Channel</p>
+                    <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Connected</p>
                   </div>
                 </div>
               </div>
@@ -96,7 +95,7 @@ const ChatPage: React.FC = () => {
                 {chatMessages.length === 0 && (
                   <div className="h-full flex items-center justify-center opacity-20 flex-col space-y-4">
                     <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                    <p className="font-black uppercase text-[10px] tracking-widest">Start a new conversation</p>
+                    <p className="font-black uppercase text-[10px] tracking-widest">Start a conversation</p>
                   </div>
                 )}
                 {chatMessages.map(m => (
@@ -120,7 +119,7 @@ const ChatPage: React.FC = () => {
                     onChange={e => setMsg(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSend()}
                     type="text" 
-                    placeholder="Secure transmission..." 
+                    placeholder="Type a message..." 
                     className="flex-1 bg-transparent border-none text-sm font-medium focus:ring-0 outline-none p-3" 
                   />
                   <button onClick={handleSend} className="bg-rojo-600 text-white p-3.5 rounded-2xl hover:bg-rojo-500 shadow-lg shadow-rojo-900/40 transition-all active:scale-95">
@@ -131,7 +130,7 @@ const ChatPage: React.FC = () => {
             </>
           ) : (
             <div className="h-full flex items-center justify-center opacity-30">
-              <p className="font-black uppercase tracking-widest text-xs">Select a channel to begin</p>
+              <p className="font-black uppercase tracking-widest text-xs">Select a contact to chat</p>
             </div>
           )}
         </main>

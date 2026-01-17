@@ -1,12 +1,14 @@
 
 import { User, ForumCategory, Thread, Post, Report, ReportType, ModStatus, Game, CatalogItem } from './types';
 
+export const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/avataaars/svg?seed=default';
+
 export const CURRENT_USER: User = {
   id: 'u-admin',
   username: 'RojoAdmin',
   displayName: 'Admin',
   email: 'admin@rojos.games',
-  avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=RojoAdmin',
+  avatarUrl: DEFAULT_AVATAR,
   role: 'Admin',
   status: 'Active',
   joinDate: '2023-01-01',
@@ -22,35 +24,11 @@ export const MOCK_USERS: User[] = [
     username: 'Viper', 
     displayName: 'Viper', 
     email: 'viper@rojos.games',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Viper', 
+    avatarUrl: DEFAULT_AVATAR, 
     role: 'User', 
     status: 'Active', 
     joinDate: '2023-05-10', 
     postCount: 45, 
-    themePreference: 'dark' 
-  },
-  { 
-    id: 'u2', 
-    username: 'Neon', 
-    displayName: 'Neon', 
-    email: 'neon@rojos.games',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Neon', 
-    role: 'User', 
-    status: 'Active', 
-    joinDate: '2024-02-15', 
-    postCount: 12, 
-    themePreference: 'dark' 
-  },
-  { 
-    id: 'u3', 
-    username: 'Mod_Sarah', 
-    displayName: 'Sarah', 
-    email: 'sarah@rojos.games',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', 
-    role: 'Moderator', 
-    status: 'Active', 
-    joinDate: '2023-03-20', 
-    postCount: 890, 
     themePreference: 'dark' 
   }
 ];
@@ -66,12 +44,11 @@ export const MOCK_THREADS: Thread[] = [
     categoryId: 'cat1', 
     authorId: 'u-admin', 
     authorName: 'Admin', 
-    title: 'Welcome to the New RojoGames Forums', 
-    content: 'We have updated our platform to focus on community discussion and simplified our user interface.', 
+    title: 'Welcome to RojoGames', 
+    content: 'Welcome to the community forums. This is a space for all players to discuss and share.', 
     createdAt: '2026-01-09T10:00:00Z', 
     replyCount: 0, 
     viewCount: 42, 
-    // Added missing required Thread properties
     likes: 0,
     likedBy: [],
     isLocked: false, 
@@ -81,103 +58,72 @@ export const MOCK_THREADS: Thread[] = [
 
 export const MOCK_POSTS: Post[] = [];
 
-export const MOCK_REPORTS: Report[] = [
-  { 
-    id: 'r1', 
-    type: ReportType.USER, 
-    targetId: 'u1', 
-    reportedBy: 'u2', 
-    reason: 'Inappropriate behavior', 
-    contentSnippet: 'Review required.', 
-    status: ModStatus.PENDING, 
-    createdAt: '2026-01-09T17:00:00Z' 
-  }
-];
+export const MOCK_REPORTS: Report[] = [];
 
-// Added MOCK_GAMES to resolve module errors in Games.tsx, Details.tsx, and Dashboard.tsx
+// Fixed error: Module '"../constants"' has no exported member 'MOCK_GAMES'
 export const MOCK_GAMES: Game[] = [
-  { 
-    id: 'g1', 
-    title: 'Neon Drift', 
-    thumbnail: 'https://picsum.photos/seed/g1/400/225', 
-    activePlayers: 1250, 
-    rating: 92, 
-    creatorName: 'CyberStudio', 
-    visits: 150000, 
-    description: 'Race through neon streets in this high-speed cyberpunk driving simulator.' 
+  {
+    id: 'g1',
+    title: 'Work at a Pizza Place',
+    thumbnail: 'https://picsum.photos/seed/pizza/400/225',
+    activePlayers: 12500,
+    creatorName: 'Dued1',
+    rating: 92,
+    visits: 4500000,
+    description: 'Work with others to fulfill food orders and use your earnings to upgrade your house and buy furniture!'
   },
-  { 
-    id: 'g2', 
-    title: 'Sky Bound', 
-    thumbnail: 'https://picsum.photos/seed/g2/400/225', 
-    activePlayers: 800, 
-    rating: 88, 
-    creatorName: 'CloudNine', 
-    visits: 85000, 
-    description: 'Explore the floating islands and master the art of flight.' 
+  {
+    id: 'g2',
+    title: 'Blox Fruits',
+    thumbnail: 'https://picsum.photos/seed/fruits/400/225',
+    activePlayers: 450000,
+    creatorName: 'Gamer Robot',
+    rating: 95,
+    visits: 25000000,
+    description: 'Welcome to Blox Fruits! Become a master swordsman or a powerful blox fruit user as you train to become the strongest player to ever live.'
   },
-  { 
-    id: 'g3', 
-    title: 'Blox Royale', 
-    thumbnail: 'https://picsum.photos/seed/g3/400/225', 
-    activePlayers: 5400, 
-    rating: 95, 
-    creatorName: 'ArenaDev', 
-    visits: 2500000, 
-    description: 'The ultimate battle royale experience on the platform.' 
-  },
-  { 
-    id: 'g4', 
-    title: 'Cafe Tycoon', 
-    thumbnail: 'https://picsum.photos/seed/g4/400/225', 
-    activePlayers: 320, 
-    rating: 82, 
-    creatorName: 'FoodieGames', 
-    visits: 45000, 
-    description: 'Build your dream cafe and serve the best coffee in the BlocVerse.' 
+  {
+    id: 'g3',
+    title: 'Adopt Me!',
+    thumbnail: 'https://picsum.photos/seed/adopt/400/225',
+    activePlayers: 180000,
+    creatorName: 'DreamCraft',
+    rating: 90,
+    visits: 35000000,
+    description: 'The #1 place to raise cute pets and decorate your house with friends!'
   }
 ];
 
-// Added MOCK_CATALOG to resolve module errors in Catalog.tsx and Details.tsx
+// Fixed error: Module '"../constants"' has no exported member 'MOCK_CATALOG'
 export const MOCK_CATALOG: CatalogItem[] = [
-  { 
-    id: 'i1', 
-    name: 'Cyber Horns', 
-    type: 'Hat', 
-    thumbnail: 'https://api.dicebear.com/7.x/shapes/svg?seed=horns', 
-    isLimited: true, 
-    creatorName: 'RojoGames', 
-    price: 500, 
-    description: 'Glow-in-the-dark cybernetic horns for the modern avatar.' 
+  {
+    id: 'i1',
+    name: 'Red Valkyrie',
+    thumbnail: 'https://picsum.photos/seed/valk/300/300',
+    type: 'Hat',
+    isLimited: true,
+    creatorName: 'RojoGames',
+    price: 50000,
+    description: 'A legendary crimson helm for the bravest warriors.'
   },
-  { 
-    id: 'i2', 
-    name: 'Elite Tactical Vest', 
-    type: 'Accessory', 
-    thumbnail: 'https://api.dicebear.com/7.x/shapes/svg?seed=vest', 
-    isLimited: false, 
-    creatorName: 'RojoGames', 
-    price: 0, 
-    description: 'Standard issue tactical gear for community moderators.' 
+  {
+    id: 'i2',
+    name: 'Classic Fedora',
+    thumbnail: 'https://picsum.photos/seed/fedora/300/300',
+    type: 'Hat',
+    isLimited: false,
+    creatorName: 'RojoGames',
+    price: 250,
+    description: 'A timeless piece of headwear for the sophisticated player.'
   },
-  { 
-    id: 'i3', 
-    name: 'Neon Katana', 
-    type: 'Gear', 
-    thumbnail: 'https://api.dicebear.com/7.x/shapes/svg?seed=katana', 
-    isLimited: true, 
-    creatorName: 'RojoGames', 
-    price: 1200, 
-    description: 'A sharp, vibrant blade that slices through the dark.' 
-  },
-  { 
-    id: 'i4', 
-    name: 'Crimson Hoodie', 
-    type: 'Shirt', 
-    thumbnail: 'https://api.dicebear.com/7.x/shapes/svg?seed=hoodie', 
-    isLimited: false, 
-    creatorName: 'RojoDesign', 
-    price: 95, 
-    description: 'Comfortable and stylish crimson hoodie.' 
+  {
+    id: 'i3',
+    name: 'Rojo Community Tee',
+    thumbnail: 'https://picsum.photos/seed/shirt/300/300',
+    type: 'Shirt',
+    isLimited: false,
+    creatorName: 'RojoGames',
+    price: 0,
+    description: 'Official community shirt. Show your pride!'
   }
 ];
