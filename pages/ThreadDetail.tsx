@@ -85,7 +85,7 @@ const ThreadDetailPage: React.FC = () => {
                     <svg className={`w-5 h-5 ${isThreadLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                     {thread.likes} Likes
                   </button>
-                  <button onClick={() => addReport(ReportType.THREAD, thread.id, 'Rules Violation', thread.content.substring(0, 100), thread.authorName, window.location.href)} className="text-[10px] font-black uppercase text-slate-600 hover:text-rojo-500 flex items-center transition-colors">Report Thread</button>
+                  <button onClick={() => addReport(ReportType.THREAD, thread.id, 'Violation of Rules', thread.content.substring(0, 100), thread.authorName, window.location.href)} className="text-[10px] font-black uppercase text-slate-600 hover:text-rojo-500 flex items-center transition-colors">Report Thread</button>
                 </div>
               </div>
             </div>
@@ -113,7 +113,7 @@ const ThreadDetailPage: React.FC = () => {
                           <svg className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                           {post.likes}
                         </button>
-                        <button onClick={() => addReport(ReportType.POST, post.id, 'Content Violation', post.content.substring(0, 100), post.authorName, `${window.location.href}#${post.id}`)} className="hover:text-rojo-500 transition-colors">Flag</button>
+                        <button onClick={() => addReport(ReportType.POST, post.id, 'Inappropriate Content', post.content.substring(0, 100), post.authorName, `${window.location.href}#${post.id}`)} className="hover:text-rojo-500 transition-colors">Flag</button>
                      </div>
                   </div>
                 </div>

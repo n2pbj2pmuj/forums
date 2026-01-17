@@ -136,28 +136,35 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const loadProfile = async (id: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-    if (!error && data) {
-      setCurrentUser(mapUser(data));
-    }
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+      if (!error && data) {
+        setCurrentUser(mapUser(data));
+      }
+    } catch (e) {}
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setOriginalAdmin(null);
+    setLoading(false);
   };
 
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
+
     const initialize = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await loadProfile(session.user.id);
-        await syncDatabase();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadProfile(session.user.id);
+          await syncDatabase();
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     initialize();
 
@@ -170,23 +177,34 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       setLoading(false);
     });
+
     return () => authListener.subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
-    if (data.user) {
-      await loadProfile(data.user.id);
-      await syncDatabase();
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      if (data.user) {
+        await loadProfile(data.user.id);
+        await syncDatabase();
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    const { data, error } = await supabase.auth.signUp({ 
-      email, password: pass, options: { data: { username } }
-    });
-    if (error) throw error;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signUp({ 
+        email, password: pass, options: { data: { username } }
+      });
+      if (error) throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loginAs = (userId: string) => {
@@ -212,6 +230,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
     if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
     if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
+    
     await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
     await loadProfile(currentUser.id);
   };
@@ -310,12 +329,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reason, content_snippet: contentSnippet, status: ModStatus.PENDING
     });
     if (error && error.code === '23505') {
-      alert("This item has already been reported and is being reviewed.");
+       alert("This item has already been reported and is currently under review by our moderation team.");
     } else if (error) {
-      console.error(error);
+       console.error("Report error:", error);
     } else {
-      alert("Report submitted successfully.");
-      await syncDatabase();
+       alert("Report successfully filed.");
+       await syncDatabase();
     }
   };
 
