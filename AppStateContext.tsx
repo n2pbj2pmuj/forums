@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './types';
 import { supabase } from './services/supabaseClient';
 import { MOCK_THREADS, MOCK_POSTS, MOCK_USERS, MOCK_REPORTS } from './constants';
@@ -38,6 +38,16 @@ interface AppState {
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
 
+// Failsafe timeout for all Supabase calls
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 3000): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+};
+
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +59,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
 
+  const initialized = useRef(false);
   const isAuthenticated = !!currentUser;
 
   useEffect(() => {
@@ -78,108 +89,103 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   };
 
-  const fetchProfile = async (uid: string, fallbackEmail?: string, metadata?: any): Promise<User | null> => {
-    console.debug(`🔍 Fetching profile for UID: ${uid}`);
+  const syncDatabase = async () => {
+    console.log("🔄 [Database] Starting background sync...");
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error) {
-        console.error("❌ Profile query error:", error);
-        if (error.code === 'PGRST116') {
-          console.warn("⚠️ User not found in 'profiles' table (PGRST116).");
-          return null;
-        }
-        return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
+      const [threadsRes, usersRes, reportsRes] = await Promise.allSettled([
+        withTimeout(supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false })),
+        withTimeout(supabase.from('profiles').select('*')),
+        withTimeout(supabase.from('reports').select('*').order('created_at', { ascending: false }))
+      ]) as any[];
+
+      if (threadsRes.status === 'fulfilled' && threadsRes.value.data) {
+        setThreads(threadsRes.value.data.map((x: any) => ({
+          id: x.id, categoryId: x.category_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
+          title: x.title, content: x.content, createdAt: x.created_at, replyCount: x.reply_count || 0,
+          viewCount: x.view_count || 0, isLocked: x.is_locked || false, isPinned: x.is_pinned || false
+        })));
       }
-      console.debug("✅ Profile retrieved successfully.");
-      return mapUser(data);
+      
+      if (usersRes.status === 'fulfilled' && usersRes.value.data) {
+        setUsers(usersRes.value.data.map((x: any) => mapUser(x)));
+      }
+
+      if (reportsRes.status === 'fulfilled' && reportsRes.value.data) {
+        setReports(reportsRes.value.data.map((x: any) => ({
+          id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
+          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+        })));
+      }
+      console.log("✅ [Database] Background sync complete.");
     } catch (e) {
-      console.error("💥 Unexpected error in fetchProfile:", e);
-      return null;
+      console.error("❌ [Database] Sync encountered issues:", e);
     }
   };
 
-  const syncDatabase = async () => {
-    console.debug("🔄 Syncing thread/user/report database...");
+  const loadIdentity = async (user: any) => {
+    if (!user) return;
+    
+    // Create immediate temporary identity so the UI isn't empty
+    const tempUser = mapUser({ id: user.id, email: user.email, user_metadata: user.user_metadata });
+    setCurrentUser(tempUser);
+    
+    // Now try to get the full profile from the DB in the background
     try {
-      const { data: threadData } = await supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false });
-      if (threadData) setThreads(threadData.map(x => ({
-        id: x.id, categoryId: x.category_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
-        title: x.title, content: x.content, createdAt: x.created_at, replyCount: x.reply_count || 0,
-        viewCount: x.view_count || 0, isLocked: x.is_locked || false, isPinned: x.is_pinned || false
-      })));
+      console.log("🔍 [Profile] Fetching full record for:", user.id);
+      const { data, error } = await withTimeout(supabase.from('profiles').select('*').eq('id', user.id).single(), 2000) as any;
       
-      const { data: userData } = await supabase.from('profiles').select('*');
-      if (userData) setUsers(userData.map(x => mapUser(x)));
-
-      const { data: reportData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
-      if (reportData) setReports(reportData.map(x => ({
-        id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
-        reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
-      })));
-      console.debug("✅ Database sync complete.");
+      if (!error && data) {
+        console.log("✅ [Profile] Found database record.");
+        setCurrentUser(mapUser(data));
+      } else if (error?.code === 'PGRST116') {
+        console.warn("💀 [Profile] Ghost token! User in auth but not in profiles table.");
+        await logout();
+      }
     } catch (e) {
-      console.error("❌ Sync failed:", e);
+      console.warn("⏱️ [Profile] DB check timed out, continuing with cached session identity.");
     }
+    
+    // Sync the rest of the forum data
+    syncDatabase();
   };
 
   const logout = async () => {
-    console.warn("📤 Logging out and clearing session...");
-    await supabase.auth.signOut();
+    console.log("📤 [Auth] Logging out...");
+    try {
+      await withTimeout(supabase.auth.signOut(), 2000);
+    } catch (e) {}
     setCurrentUser(null);
     setOriginalAdmin(null);
     localStorage.removeItem('rojo_logged_in');
+    setLoading(false);
   };
 
   useEffect(() => {
-    let mounted = true;
-    console.log("🚀 AppStateContext Mount: Starting Session Initialization");
+    if (initialized.current) return;
+    initialized.current = true;
     
-    // Safety failsafe: If we're still loading after 5 seconds, force stop loading.
-    const failsafe = setTimeout(() => {
-      if (mounted && loading) {
-        console.error("🚨 INITIALIZATION FAILSAFE: Auth took too long. Forcing load completion.");
-        setLoading(false);
-      }
-    }, 5000);
+    let mounted = true;
+    console.log("🚀 [System] Initializing App State...");
 
     const initialize = async () => {
       try {
-        const storedHint = localStorage.getItem('rojo_logged_in');
-        console.debug(`💾 LocalStorage Hint: rojo_logged_in = ${storedHint}`);
+        // Step 1: Rapid session check
+        console.log("🛰️ [Auth] Polling session...");
+        const { data: { session } } = await withTimeout(supabase.auth.getSession(), 2500) as any;
         
-        console.debug("🛰️ Calling supabase.auth.getSession()...");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error("❌ Session retrieval failed:", sessionError);
-        }
-
-        if (session?.user && mounted) {
-          console.log(`👤 Active session found for: ${session.user.email}`);
-          const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
-          
-          if (mounted) {
-            if (profile) {
-              console.log("✅ Identity verified. Updating state.");
-              setCurrentUser(profile);
-              localStorage.setItem('rojo_logged_in', 'true');
-              syncDatabase();
-            } else {
-              console.warn("💀 Ghost Token Detected! Session exists but user missing from database.");
-              await logout();
-            }
+        if (mounted) {
+          if (session?.user) {
+            console.log("👤 [Auth] Active session found.");
+            await loadIdentity(session.user);
+          } else {
+            console.log("⚪ [Auth] No session found.");
           }
-        } else {
-          console.log("⚪ No active session detected via getSession().");
+          // Step 2: UNLOCK UI IMMEDIATELY
+          setLoading(false);
         }
       } catch (err) {
-        console.error("💥 Critical error during initialize():", err);
-      } finally {
-        if (mounted) {
-          console.log("🏁 Auth initialization logic finished.");
-          setLoading(false);
-          clearTimeout(failsafe);
-        }
+        console.error("🚨 [Auth] Session polling failed or timed out:", err);
+        if (mounted) setLoading(false);
       }
     };
 
@@ -187,62 +193,34 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      
-      console.log(`🔔 Supabase Auth Event: ${event}`);
+      console.log(`🔔 [Auth Event] ${event}`);
 
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
-          console.debug(`🛠️ Handling ${event} for ${session.user.email}`);
-          const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
-          if (mounted) {
-            if (profile) {
-              setCurrentUser(profile);
-              localStorage.setItem('rojo_logged_in', 'true');
-              syncDatabase();
-              setLoading(false);
-            } else if (event === 'SIGNED_IN') {
-              console.error("❌ Signed in but profile creation/lookup failed.");
-              await logout();
-              setLoading(false);
-            }
-          }
-        }
-      } else if (event === 'SIGNED_OUT') {
-        console.log("👋 User signed out.");
-        if (mounted) {
-          setCurrentUser(null);
-          localStorage.removeItem('rojo_logged_in');
+          await loadIdentity(session.user);
           setLoading(false);
         }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        localStorage.removeItem('rojo_logged_in');
+        setLoading(false);
       }
     });
 
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
-      clearTimeout(failsafe);
     };
   }, []);
 
   const login = async (email: string, pass: string) => {
-    console.log(`🔑 Attempting login for: ${email}`);
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-      if (error) {
-        console.error("❌ Login failed:", error);
-        throw error;
-      }
+      console.log("🔑 [Auth] Attempting login...");
+      const { data, error } = await withTimeout(supabase.auth.signInWithPassword({ email, password: pass }), 5000) as any;
+      if (error) throw error;
       if (data.session) {
-        console.log("✅ Login successful. Fetching profile...");
-        const profile = await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
-        if (profile) {
-          setCurrentUser(profile);
-          localStorage.setItem('rojo_logged_in', 'true');
-          syncDatabase();
-        } else {
-          throw new Error("Profile synchronization failed. Your account might be partially created.");
-        }
+        await loadIdentity(data.user);
       }
     } finally {
       setLoading(false);
@@ -250,20 +228,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    console.log(`📝 Attempting signup for: ${username} (${email})`);
-    const { data, error } = await supabase.auth.signUp({ 
+    console.log("📝 [Auth] Creating account...");
+    const { data, error } = await withTimeout(supabase.auth.signUp({ 
       email: email, 
       password: pass,
       options: { data: { username } }
-    });
-    if (error) {
-      console.error("❌ Signup failed:", error);
-      throw error;
-    }
+    }), 5000) as any;
+    
+    if (error) throw error;
     if (data.user) {
-      console.log("✅ Auth account created. Upserting public profile...");
       try {
-        const { error: profileError } = await supabase.from('profiles').upsert({
+        await supabase.from('profiles').upsert({
           id: data.user.id,
           username,
           display_name: username,
@@ -271,18 +246,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
           role: 'User'
         });
-        if (profileError) console.error("❌ Profile upsert error:", profileError);
-        else console.log("✅ Profile created.");
-      } catch (e) {
-        console.error("💥 Profile creation exception:", e);
-      }
+      } catch (e) {}
     }
   };
 
   const loginAs = (userId: string) => {
     const target = users.find(u => u.id === userId);
     if (target && currentUser) {
-      console.log(`🎭 Impersonating user: ${target.username}`);
       if (!originalAdmin) setOriginalAdmin(currentUser);
       setCurrentUser(target);
     }
@@ -290,7 +260,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const revertToAdmin = () => {
     if (originalAdmin) {
-      console.log("🔙 Reverting to admin account.");
       setCurrentUser(originalAdmin);
       setOriginalAdmin(null);
     }
@@ -308,8 +277,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
       if (!error) {
-         const updated = await fetchProfile(currentUser.id, currentUser.email);
-         if (updated) setCurrentUser(updated);
+         await loadIdentity(currentUser);
       } else {
          setCurrentUser({ ...currentUser, ...data });
       }
