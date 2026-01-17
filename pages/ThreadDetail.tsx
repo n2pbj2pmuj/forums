@@ -6,6 +6,65 @@ import Layout from '../components/Layout';
 import { ReportType } from '../types';
 import { DEFAULT_AVATAR } from '../constants';
 
+const MediaRenderer: React.FC<{ content: string; isBanned: boolean }> = ({ content, isBanned }) => {
+  if (isBanned) return <div className="font-mono break-all">{censorText(content)}</div>;
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = content.split(urlRegex);
+
+  return (
+    <div className="space-y-4 leading-relaxed whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+          const lowerPart = part.toLowerCase();
+          
+          // Image/GIF detection
+          if (lowerPart.match(/\.(jpeg|jpg|gif|png|webp|svg)/)) {
+            return (
+              <div key={i} className="my-4 max-w-full">
+                <img src={part} alt="Post content" className="max-h-[500px] rounded-2xl border border-rojo-900/10 shadow-lg object-contain bg-black/5" />
+              </div>
+            );
+          }
+          
+          // Video detection (MP4/WebM)
+          if (lowerPart.match(/\.(mp4|webm|ogg)/)) {
+            return (
+              <div key={i} className="my-4 max-w-full">
+                <video controls className="max-h-[500px] w-full rounded-2xl border border-rojo-900/10 shadow-lg bg-black/5">
+                  <source src={part} type={`video/${lowerPart.split('.').pop()}`} />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            );
+          }
+
+          // YouTube detection
+          const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+          const youtubeMatch = part.match(youtubeRegex);
+          if (youtubeMatch) {
+            return (
+              <div key={i} className="my-4 aspect-video w-full max-w-3xl">
+                <iframe 
+                  className="w-full h-full rounded-2xl shadow-lg border border-rojo-900/10"
+                  src={`https://www.youtube.com/embed/${youtubeMatch[1]}`} 
+                  title="YouTube video player" 
+                  frameBorder="0" 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                  allowFullScreen
+                ></iframe>
+              </div>
+            );
+          }
+
+          return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-rojo-500 font-bold hover:underline break-all">{part}</a>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </div>
+  );
+};
+
 const ThreadDetailPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -86,7 +145,7 @@ const ThreadDetailPage: React.FC = () => {
                 <span className="text-[10px] font-black uppercase text-slate-600">{new Date(thread.createdAt).toLocaleString()}</span>
               </div>
               <div className={`leading-relaxed mb-10 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                {isThreadAuthorBanned ? censorText(thread.content) : thread.content}
+                <MediaRenderer content={thread.content} isBanned={isThreadAuthorBanned} />
               </div>
               <div className="flex items-center justify-between border-t border-rojo-900/10 pt-6">
                 <div className="flex items-center gap-6">
@@ -136,9 +195,9 @@ const ThreadDetailPage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <p className={`text-sm leading-relaxed mb-4 flex-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                      {isPostAuthorBanned ? censorText(post.content) : post.content}
-                    </p>
+                    <div className={`mb-4 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <MediaRenderer content={post.content} isBanned={isPostAuthorBanned} />
+                    </div>
                   )}
                   
                   <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold uppercase pt-2 border-t border-rojo-900/5">
@@ -172,7 +231,7 @@ const ThreadDetailPage: React.FC = () => {
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               className={`w-full h-32 rounded-2xl p-5 text-sm outline-none focus:ring-2 ring-rojo-500 mb-6 border transition-all ${isDark ? 'bg-rojo-950 border-rojo-900/50 text-white placeholder-slate-800' : 'bg-rojo-50 border-rojo-100'}`}
-              placeholder="What are your thoughts on this topic?"
+              placeholder="Post a link to an image, GIF, or YouTube video to embed it..."
             />
             <div className="flex justify-end">
               <button 

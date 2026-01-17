@@ -21,21 +21,21 @@ const BannedPage: React.FC = () => {
         
         <div className="p-10 space-y-8 text-center">
           <p className="text-slate-400 text-sm leading-relaxed px-4">
-            Access to this account has been removed for violating the rules.
+            Access to this account has been restricted for violating the rules.
           </p>
 
           <div className="bg-rojo-950/20 border border-rojo-900/20 rounded-xl p-8 text-left space-y-6">
             <div>
-              <p className="text-[9px] uppercase font-bold text-rojo-500 mb-2 tracking-widest">Incident Log</p>
+              <p className="text-[9px] uppercase font-bold text-rojo-500 mb-2 tracking-widest">Reason</p>
               <p className="text-sm font-medium italic text-slate-300">"{currentUser?.banReason || 'No specific reason provided.'}"</p>
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-rojo-900/10 pt-6">
               <div>
-                <p className="text-[9px] uppercase font-bold text-slate-500 mb-1 tracking-widest">Account Status</p>
+                <p className="text-[9px] uppercase font-bold text-slate-500 mb-1 tracking-widest">Status</p>
                 <p className="text-sm font-bold text-rojo-500 uppercase">Banned</p>
               </div>
               <div>
-                <p className="text-[9px] uppercase font-bold text-slate-500 mb-1 tracking-widest">Restriction End</p>
+                <p className="text-[9px] uppercase font-bold text-slate-500 mb-1 tracking-widest">Expiration</p>
                 <p className="text-sm font-bold">{currentUser?.banExpires || 'Permanent'}</p>
               </div>
             </div>
