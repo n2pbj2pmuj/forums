@@ -45,7 +45,6 @@ interface AppState {
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => Promise<void>;
   sendChatMessage: (receiverId: string, content: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
-  // Added missing password methods
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
 }
@@ -118,7 +117,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setReports(reportsRes.value.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
           authorUsername: x.author_username, targetUrl: x.target_url,
-          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
         })));
       }
       if (postsRes.status === 'fulfilled' && postsRes.value.data) {
@@ -128,7 +127,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         })));
       }
       
-      // Fetch Chat Partners (to only show messaged users in DM list)
       if (currentUser) {
         const { data: partners } = await supabase.from('messages')
           .select('sender_id, receiver_id')
@@ -311,11 +309,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reason, content_snippet: contentSnippet, status: ModStatus.PENDING
     });
     if (error && error.code === '23505') {
-       alert("This content has already been reported and is being reviewed.");
+       alert("This content has already been reported and is currently under review by our moderation team.");
     } else if (error) {
        console.error("Report Error:", error);
     } else {
-       alert("Report filed successfully.");
+       alert("Report filed successfully. Thank you for keeping our community safe.");
        await syncDatabase();
     }
   };
@@ -335,7 +333,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data) setChatMessages(data as ChatMessage[]);
   };
 
-  // Implemented missing password methods
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) throw error;

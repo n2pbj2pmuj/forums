@@ -72,10 +72,10 @@ CREATE TABLE messages (
 CREATE TABLE reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   type TEXT NOT NULL, -- 'POST', 'THREAD', 'USER'
-  target_id TEXT NOT NULL UNIQUE, -- Only reportable once
-  reported_by TEXT NOT NULL, -- Reporter Username
-  author_username TEXT, -- Reported Person Username
-  target_url TEXT, -- Link to content
+  target_id TEXT NOT NULL UNIQUE, -- Unique: Only reported once
+  reported_by TEXT NOT NULL, -- Username of reporter
+  author_username TEXT, -- Username of reported person
+  target_url TEXT, -- URL link to content
   reason TEXT NOT NULL,
   content_snippet TEXT,
   status TEXT DEFAULT 'PENDING',
@@ -150,13 +150,19 @@ CREATE POLICY "Users update own" ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Admins update all" ON profiles FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator'))
 );
+
 CREATE POLICY "Threads viewable" ON threads FOR SELECT USING (true);
 CREATE POLICY "Threads insert" ON threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Threads update (likes)" ON threads FOR UPDATE USING (true);
+CREATE POLICY "Threads update (likes/moderation)" ON threads FOR UPDATE USING (true);
+
 CREATE POLICY "Posts viewable" ON posts FOR SELECT USING (true);
 CREATE POLICY "Posts insert" ON posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Posts update (likes)" ON posts FOR UPDATE USING (true);
+
 CREATE POLICY "Messages private" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 CREATE POLICY "Messages send" ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
-CREATE POLICY "Reports admin" ON reports FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator')));
+
+CREATE POLICY "Reports admin access" ON reports FOR ALL USING (
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND (role = 'Admin' OR role = 'Moderator'))
+);
 CREATE POLICY "Reports create" ON reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');

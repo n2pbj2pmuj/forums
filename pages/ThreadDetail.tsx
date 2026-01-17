@@ -46,9 +46,9 @@ const ThreadDetailPage: React.FC = () => {
           </Link>
           {isAdmin && (
             <div className="flex items-center gap-2">
-              <button onClick={() => toggleThreadPin(thread.id)} className={`px-3 py-1 rounded text-[10px] font-black uppercase ${thread.isPinned ? 'bg-rojo-600' : 'bg-slate-800 text-slate-400'}`}>{thread.isPinned ? 'Pinned' : 'Pin'}</button>
-              <button onClick={() => toggleThreadLock(thread.id)} className={`px-3 py-1 rounded text-[10px] font-black uppercase ${thread.isLocked ? 'bg-rojo-600' : 'bg-slate-800 text-slate-400'}`}>{thread.isLocked ? 'Locked' : 'Lock'}</button>
-              <button onClick={() => { if(window.confirm('Delete?')) deleteThread(thread.id); navigate('/'); }} className="px-3 py-1 bg-rojo-600/20 text-rojo-400 rounded text-[10px] font-black uppercase">Delete</button>
+              <button onClick={() => toggleThreadPin(thread.id)} className={`px-3 py-1 rounded text-[10px] font-black uppercase transition-all ${thread.isPinned ? 'bg-rojo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>{thread.isPinned ? 'Pinned' : 'Pin'}</button>
+              <button onClick={() => toggleThreadLock(thread.id)} className={`px-3 py-1 rounded text-[10px] font-black uppercase transition-all ${thread.isLocked ? 'bg-rojo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>{thread.isLocked ? 'Locked' : 'Lock'}</button>
+              <button onClick={() => { if(window.confirm('Are you sure you want to delete this topic?')) { deleteThread(thread.id); navigate('/'); } }} className="px-3 py-1 bg-rojo-600/20 text-rojo-400 rounded text-[10px] font-black uppercase hover:bg-rojo-600 hover:text-white transition-all">Delete</button>
             </div>
           )}
         </div>
@@ -56,10 +56,11 @@ const ThreadDetailPage: React.FC = () => {
         <div className={`border rounded-3xl overflow-hidden shadow-2xl transition-all ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
           <div className="flex flex-col md:flex-row">
             <div className={`w-full md:w-48 p-8 flex flex-col items-center text-center border-b md:border-b-0 md:border-r ${isDark ? 'bg-rojo-950/20 border-rojo-900/20' : 'bg-rojo-50 border-rojo-100'}`}>
-              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black mb-4 border ${isDark ? 'bg-black border-rojo-900/50 text-rojo-500' : 'bg-white border-rojo-100 text-rojo-600'}`}>
+              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black mb-4 border ${isDark ? 'bg-black border-rojo-900/50 text-rojo-500 shadow-xl shadow-rojo-500/5' : 'bg-white border-rojo-100 text-rojo-600'}`}>
                 {thread.authorName.charAt(0)}
               </div>
               <p className="font-black truncate w-full">@{thread.authorName}</p>
+              <p className="text-[9px] font-black uppercase text-slate-500 mt-1">Author</p>
             </div>
             <div className="flex-1 p-10 flex flex-col">
               <div className="flex items-center justify-between mb-6">
@@ -68,22 +69,28 @@ const ThreadDetailPage: React.FC = () => {
               </div>
               <div className={`leading-relaxed mb-10 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{thread.content}</div>
               <div className="flex items-center justify-between border-t border-rojo-900/10 pt-6">
-                <button onClick={() => likeThread(thread.id)} className={`flex items-center gap-1 font-black text-xs uppercase ${isThreadLiked ? 'text-rojo-500' : 'text-slate-500 hover:text-rojo-400'}`}>
-                  <svg className={`w-5 h-5 ${isThreadLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                  {thread.likes} Likes
-                </button>
-                <button onClick={() => addReport(ReportType.THREAD, thread.id, 'Inappropriate Content', thread.content.substring(0, 100), thread.authorName, window.location.href)} className="text-[10px] font-black uppercase text-slate-600 hover:text-rojo-500">Report</button>
+                <div className="flex items-center gap-6">
+                  <button onClick={() => likeThread(thread.id)} className={`flex items-center gap-2 font-black text-xs uppercase transition-all hover:scale-105 ${isThreadLiked ? 'text-rojo-500' : 'text-slate-500 hover:text-rojo-400'}`}>
+                    <svg className={`w-5 h-5 ${isThreadLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                    {thread.likes} Likes
+                  </button>
+                  <button onClick={() => addReport(ReportType.THREAD, thread.id, 'Violation of Community Standards', thread.content.substring(0, 100), thread.authorName, window.location.href)} className="text-[10px] font-black uppercase text-slate-600 hover:text-rojo-500 transition-colors">Report Thread</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
+          <h2 className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-2">{threadPosts.length} Replies</h2>
           {threadPosts.map(post => {
             const isLiked = post.likedBy?.includes(currentUser?.id || '');
             return (
-              <div key={post.id} className={`border rounded-[2rem] overflow-hidden shadow-lg flex transition-all ${isDark ? 'bg-black/40 border-rojo-900/20' : 'bg-white border-rojo-100'}`}>
+              <div key={post.id} id={post.id} className={`border rounded-[2rem] overflow-hidden shadow-lg flex transition-all ${isDark ? 'bg-black/40 border-rojo-900/20' : 'bg-white border-rojo-100'}`}>
                 <div className={`w-16 md:w-32 p-4 flex flex-col items-center text-center shrink-0 border-r ${isDark ? 'bg-rojo-950/10 border-rojo-900/10' : 'bg-rojo-50 border-rojo-100'}`}>
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center text-lg font-black mb-2 border ${isDark ? 'bg-black border-rojo-900/30 text-slate-500' : 'bg-white border-rojo-100 text-slate-600'}`}>
+                    {post.authorName.charAt(0)}
+                  </div>
                   <p className="text-[9px] font-black truncate w-full text-slate-400">@{post.authorName}</p>
                 </div>
                 <div className="flex-1 p-6">
@@ -91,11 +98,11 @@ const ThreadDetailPage: React.FC = () => {
                   <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold uppercase">
                      <span>{new Date(post.createdAt).toLocaleDateString()}</span>
                      <div className="flex items-center space-x-6">
-                        <button onClick={() => likePost(post.id)} className={`flex items-center gap-1 font-black ${isLiked ? 'text-rojo-500' : 'hover:text-rojo-400'}`}>
+                        <button onClick={() => likePost(post.id)} className={`flex items-center gap-1 font-black transition-all hover:scale-110 ${isLiked ? 'text-rojo-500' : 'hover:text-rojo-400'}`}>
                           <svg className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                           {post.likes}
                         </button>
-                        <button onClick={() => addReport(ReportType.POST, post.id, 'Violation', post.content.substring(0, 50), post.authorName, `${window.location.href}#${post.id}`)} className="hover:text-rojo-500">Flag</button>
+                        <button onClick={() => addReport(ReportType.POST, post.id, 'Post Violation', post.content.substring(0, 100), post.authorName, `${window.location.href}#${post.id}`)} className="hover:text-rojo-500 transition-colors">Flag</button>
                      </div>
                   </div>
                 </div>
@@ -106,25 +113,27 @@ const ThreadDetailPage: React.FC = () => {
 
         {currentUser && !thread.isLocked ? (
           <div className={`border rounded-3xl p-10 shadow-2xl transition-all ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
+            <h3 className="text-sm font-black uppercase text-slate-500 mb-6 flex items-center gap-2">Post a Reply</h3>
             <textarea 
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              className={`w-full h-32 rounded-2xl p-5 text-sm outline-none focus:ring-2 ring-rojo-500 mb-6 border ${isDark ? 'bg-rojo-950 border-rojo-900/50 text-white' : 'bg-rojo-50 border-rojo-100'}`}
-              placeholder="Post a reply..."
+              className={`w-full h-32 rounded-2xl p-5 text-sm outline-none focus:ring-2 ring-rojo-500 mb-6 border transition-all ${isDark ? 'bg-rojo-950 border-rojo-900/50 text-white placeholder-slate-800' : 'bg-rojo-50 border-rojo-100'}`}
+              placeholder="What are your thoughts on this topic?"
             />
             <div className="flex justify-end">
               <button 
                 onClick={handleReply}
                 disabled={isSubmitting || !replyText.trim()}
-                className="bg-rojo-600 text-white px-12 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rojo-500 disabled:opacity-20 transition-all"
+                className="bg-rojo-600 text-white px-12 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rojo-500 shadow-xl shadow-rojo-900/40 disabled:opacity-20 transition-all"
               >
                 Post Reply
               </button>
             </div>
           </div>
         ) : thread.isLocked ? (
-          <div className="p-12 text-center opacity-40">
-            <p className="font-black uppercase text-xs tracking-widest text-rojo-500">Thread Locked</p>
+          <div className={`p-12 text-center border rounded-3xl border-dashed transition-all ${isDark ? 'border-rojo-900/30 text-slate-500' : 'border-rojo-100 text-slate-400'}`}>
+            <p className="font-black uppercase text-xs tracking-[0.3em] text-rojo-500">Thread Locked</p>
+            <p className="text-[10px] mt-2 font-medium">This topic is no longer accepting replies.</p>
           </div>
         ) : null}
       </div>
