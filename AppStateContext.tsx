@@ -78,13 +78,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   };
 
-  const fetchProfile = async (uid: string, fallbackEmail?: string, metadata?: any): Promise<User> => {
+  const fetchProfile = async (uid: string, fallbackEmail?: string, metadata?: any): Promise<User | null> => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error || !data) return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
+      if (error || !data) {
+        // If there's an error but we have fallback info, we return fallback
+        // UNLESS the error is specifically "not found" which might mean the user was deleted from the DB
+        if (error?.code === 'PGRST116') return null; 
+        return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
+      }
       return mapUser(data);
     } catch (e) {
-      return mapUser({ id: uid, email: fallbackEmail, user_metadata: metadata });
+      return null;
     }
   };
 
@@ -112,23 +117,43 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (e) {}
   };
 
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setOriginalAdmin(null);
+  };
+
   useEffect(() => {
     let mounted = true;
 
     const initialize = async () => {
       try {
+        console.log("🔄 Starting identity check...");
         const { data: { session } } = await supabase.auth.getSession();
+        
         if (session?.user && mounted) {
+          console.log("📍 Session found, verifying profile...");
           const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
+          
           if (mounted) {
-            setCurrentUser(profile);
-            syncDatabase();
+            if (profile) {
+              setCurrentUser(profile);
+              syncDatabase();
+            } else {
+              console.warn("💀 Ghost Token Detected! User missing from DB. Clearing session...");
+              await logout();
+            }
           }
+        } else {
+          console.log("⚪ No existing session.");
         }
       } catch (err) {
-        console.error("Auth Init Error:", err);
+        console.error("💥 Critical Auth Error:", err);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          console.log("🏁 Sync complete.");
+        }
       }
     };
 
@@ -137,16 +162,28 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
+      console.log(`🔔 Auth Notification: ${event}`);
+
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
           const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
           if (mounted) {
-            setCurrentUser(profile);
-            syncDatabase();
+            if (profile) {
+              setCurrentUser(profile);
+              syncDatabase();
+              setLoading(false);
+            } else if (event !== 'INITIAL_SESSION') {
+              // Only auto-logout on active SIGNED_IN events if profile is missing
+              await logout();
+              setLoading(false);
+            }
           }
         }
       } else if (event === 'SIGNED_OUT') {
-        if (mounted) setCurrentUser(null);
+        if (mounted) {
+          setCurrentUser(null);
+          setLoading(false);
+        }
       }
     });
 
@@ -163,8 +200,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) throw error;
       if (data.session) {
         const profile = await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
-        setCurrentUser(profile);
-        syncDatabase();
+        if (profile) {
+          setCurrentUser(profile);
+          syncDatabase();
+        } else {
+          throw new Error("Account verified but profile not found. Please contact support.");
+        }
       }
     } finally {
       setLoading(false);
@@ -190,12 +231,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
       } catch (e) {}
     }
-  };
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-    setOriginalAdmin(null);
   };
 
   const loginAs = (userId: string) => {
@@ -226,7 +261,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
       if (!error) {
          const updated = await fetchProfile(currentUser.id, currentUser.email);
-         setCurrentUser(updated);
+         if (updated) setCurrentUser(updated);
       } else {
          setCurrentUser({ ...currentUser, ...data });
       }
