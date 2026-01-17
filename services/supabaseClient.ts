@@ -22,4 +22,12 @@ if (!supabaseUrl || !supabaseKey) {
   console.warn("Supabase credentials missing. Client might not initialize properly.");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Explicitly define auth options for persistence
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage
+  }
+});

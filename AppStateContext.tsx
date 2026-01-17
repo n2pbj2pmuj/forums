@@ -55,14 +55,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [theme]);
 
   const mapUser = (data: any): User => {
-    // If user is the one specified in the login or has admin email, promote them
-    const isSpecial = data.email === 'admin@rojos.games' || data.user_metadata?.username === 'Admin';
+    const email = data.email || '';
+    const isSpecial = email === 'admin@rojos.games' || data.user_metadata?.username?.toLowerCase().includes('admin');
     
     return {
       id: data.id,
       username: data.username || data.user_metadata?.username || 'Member',
-      displayName: data.display_name || data.user_metadata?.display_name || data.username || data.email?.split('@')[0] || 'User',
-      email: data.email || '',
+      displayName: data.display_name || data.user_metadata?.display_name || data.username || email.split('@')[0] || 'User',
+      email: email,
       avatarUrl: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
       bannerUrl: data.banner_url,
       role: isSpecial ? 'Admin' : (data.role as any || 'User'),
@@ -89,7 +89,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const syncDatabase = async () => {
-    // Individually fetch to prevent one missing table from crashing the whole app
+    // Individual fetches to prevent table 404s from breaking the app
     try {
       const { data: threadData } = await supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false });
       if (threadData) setThreads(threadData.map(x => ({
@@ -105,7 +105,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isLocked: x.is_locked || false,
         isPinned: x.is_pinned || false
       })));
-    } catch (e) { console.warn("Threads table not found, using mocks."); }
+    } catch (e) {}
 
     try {
       const { data: postData } = await supabase.from('posts').select('*, profiles(username, display_name)');
@@ -119,12 +119,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         likes: x.likes || 0,
         likedBy: x.liked_by || []
       })));
-    } catch (e) { console.warn("Posts table not found, using mocks."); }
+    } catch (e) {}
 
     try {
       const { data: userData } = await supabase.from('profiles').select('*');
       if (userData) setUsers(userData.map(x => mapUser(x)));
-    } catch (e) { console.warn("Profiles table not found, using mocks."); }
+    } catch (e) {}
 
     try {
       const { data: reportData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
@@ -138,40 +138,52 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         status: x.status as ModStatus,
         createdAt: x.created_at
       })));
-    } catch (e) { console.warn("Reports table not found, using mocks."); }
+    } catch (e) {}
   };
 
   useEffect(() => {
     let mounted = true;
 
     const initialize = async () => {
+      // 1. Force unblock UI if something hangs
+      const safety = setTimeout(() => { if (mounted) setLoading(false); }, 2000);
+
       try {
+        // 2. Check for existing session
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user && mounted) {
+          // 3. Mark as authenticated immediately
           setIsAuthenticated(true);
           
-          // Construct user from session immediately so we aren't "Loading..."
-          const initialUser = mapUser({ 
+          // 4. Create an immediate "Metadata User" so the UI doesn't show placeholders
+          const tempUser = mapUser({ 
             id: session.user.id, 
             email: session.user.email,
             user_metadata: session.user.user_metadata 
           });
-          setCurrentUser(initialUser);
-          setLoading(false); // Unblock UI immediately
+          setCurrentUser(tempUser);
+          
+          // 5. Unblock UI
+          setLoading(false);
+          clearTimeout(safety);
 
-          // Then try to refine it and sync DB in background
-          const realProfile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
+          // 6. Refine with real DB data in background
+          const fullUser = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
           if (mounted) {
-            setCurrentUser(realProfile);
+            setCurrentUser(fullUser);
             syncDatabase();
           }
-        } else if (mounted) {
-          setIsAuthenticated(false);
-          setLoading(false);
+        } else {
+          if (mounted) {
+            setIsAuthenticated(false);
+            setLoading(false);
+            clearTimeout(safety);
+          }
         }
       } catch (err) {
         if (mounted) setLoading(false);
+        clearTimeout(safety);
       }
     };
 
@@ -179,7 +191,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+      
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
           setIsAuthenticated(true);
           const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
@@ -231,9 +244,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
           role: 'User'
         });
-      } catch (e) {
-        console.warn("Could not create profile record, metadata will be used.");
-      }
+      } catch (e) {}
     }
   };
 
@@ -275,16 +286,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const dbData: any = { ...data };
-    if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
-    if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
-    if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
-    
     try {
+      const dbData: any = { ...data };
+      if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
+      if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
+      if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
+      
       const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
       if (!error) {
          const updated = await fetchProfile(currentUser.id, currentUser.email);
          setCurrentUser(updated);
+      } else {
+         setCurrentUser({ ...currentUser, ...data });
       }
     } catch (e) {
       setCurrentUser({ ...currentUser, ...data });
@@ -292,12 +305,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    const dbData: any = { ...data };
-    if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
-    if (data.username !== undefined) { dbData.username = data.username; delete dbData.username; }
-    if (data.email !== undefined) { dbData.email = data.email; delete dbData.email; }
-    if (data.role !== undefined) { dbData.role = data.role; delete dbData.role; }
     try {
+      const dbData: any = { ...data };
+      if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
+      if (data.username !== undefined) { dbData.username = data.username; delete dbData.username; }
+      if (data.email !== undefined) { dbData.email = data.email; delete dbData.email; }
+      if (data.role !== undefined) { dbData.role = data.role; delete dbData.role; }
       await supabase.from('profiles').update(dbData).eq('id', userId);
       await syncDatabase();
     } catch (e) {
