@@ -31,13 +31,13 @@ const HomePage: React.FC = () => {
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Forums</h1>
-            <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">Community Discussion & Support</p>
+            <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Forum Threads</h1>
+            <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">Community Topics & Discussion</p>
           </div>
           <div className="flex items-center gap-3">
             <input 
               type="text" 
-              placeholder="Search topics..." 
+              placeholder="Search forum..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`px-4 py-2 rounded-lg text-sm w-full md:w-64 border transition-all outline-none focus:ring-1 ring-rojo-500 ${isDark ? 'bg-rojo-950/50 border-rojo-900/30 text-white' : 'bg-white border-slate-200'}`}
@@ -46,7 +46,7 @@ const HomePage: React.FC = () => {
               onClick={() => setShowModal(true)}
               className="px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest bg-rojo-600 hover:bg-rojo-500 text-white shadow-lg shadow-rojo-900/20"
             >
-              New Thread
+              Create Thread
             </button>
           </div>
         </div>
@@ -103,7 +103,7 @@ const HomePage: React.FC = () => {
             </div>
             <div className="p-8 space-y-6">
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Subject</label>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Thread Title</label>
                 <input 
                   required
                   value={newTitle}
@@ -112,7 +112,7 @@ const HomePage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Message</label>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Message Body</label>
                 <textarea 
                   required
                   value={newContent}

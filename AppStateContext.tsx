@@ -73,25 +73,26 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   };
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string, email?: string) => {
     console.log(`[Session] Fetching profile for UID: ${uid}`);
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       
       if (error || !data) {
-        console.warn("[Session] Profile not found in database. Using fallback guest profile.");
-        const fallback = mapUser({ id: uid });
+        console.warn("[Session] Profile fetch failed or missing. Creating fallback user profile.");
+        // Defensive fallback to prevent app hang
+        const fallback = mapUser({ id: uid, email: email, username: email?.split('@')[0] });
         setCurrentUser(fallback);
         return fallback;
       }
       
-      console.log("[Session] Profile loaded successfully.");
+      console.log("[Session] Profile loaded successfully from DB.");
       const mapped = mapUser(data);
       setCurrentUser(mapped);
       return mapped;
     } catch (err) {
-      console.error("[Session] Critical profile fetch error:", err);
-      const fallback = mapUser({ id: uid });
+      console.error("[Session] Critical profile error:", err);
+      const fallback = mapUser({ id: uid, email });
       setCurrentUser(fallback);
       return fallback;
     }
@@ -139,39 +140,51 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         targetId: x.target_id,
         reportedBy: x.reported_by,
         reason: x.reason,
+        // Fixed mapping to use camelCase contentSnippet as defined in Report interface
         contentSnippet: x.content_snippet,
         status: x.status as ModStatus,
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.error("[Sync] Database broadcast sync failed:", err);
+      console.error("[Sync] Database sync failed:", err);
     }
   };
 
   useEffect(() => {
+    let mounted = true;
+    
+    // SAFETY VALVE: Force stop loading if database takes > 3 seconds
+    const safetyTimer = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn("[Session] Force stopping loading screen due to safety timeout.");
+        setLoading(false);
+      }
+    }, 3000);
+
     const initSession = async () => {
       console.log("[Session] Initializing forum session...");
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error("[Session] Error checking session:", sessionError);
-        }
+        if (sessionError) throw sessionError;
 
-        if (session) {
+        if (session?.user) {
           console.log("[Session] Active session found. Restoring...");
-          await fetchProfile(session.user.id);
-          setIsAuthenticated(true);
+          await fetchProfile(session.user.id, session.user.email);
+          if (mounted) setIsAuthenticated(true);
         } else {
-          console.log("[Session] No active session. Loading as guest.");
+          console.log("[Session] No active session. Waiting for login.");
         }
         
         await syncDatabase();
       } catch (err) {
-        console.error("[Session] Unhandled error during init:", err);
+        console.error("[Session] Initialization failed:", err);
       } finally {
-        console.log("[Session] Init complete. Turning off loading screen.");
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          clearTimeout(safetyTimer);
+          console.log("[Session] Loading complete.");
+        }
       }
     };
 
@@ -180,17 +193,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[Auth] Event: ${event}`);
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        if (session) {
-          await fetchProfile(session.user.id);
+        if (session?.user) {
+          await fetchProfile(session.user.id, session.user.email);
           setIsAuthenticated(true);
+          setLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        setLoading(false);
       }
     });
 
-    return () => authListener.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, pass: string) => {
@@ -198,7 +216,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (error) throw error;
     
     if (data.session) {
-      await fetchProfile(data.user.id);
+      await fetchProfile(data.user.id, data.user.email);
       setIsAuthenticated(true);
     }
   };

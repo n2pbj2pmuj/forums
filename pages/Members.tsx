@@ -19,13 +19,13 @@ const MembersPage: React.FC = () => {
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className={`text-4xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>CITIZEN REGISTRY</h1>
-            <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-1">Network Identity Database</p>
+            <h1 className={`text-4xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>MEMBER LIST</h1>
+            <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-1">Forum Community Database</p>
           </div>
           <div className="relative group">
             <input 
               type="text" 
-              placeholder="Search identities..." 
+              placeholder="Search members..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={`pl-12 pr-6 py-3 rounded-2xl text-sm w-full md:w-80 border transition-all outline-none focus:ring-2 ring-rojo-500 shadow-xl ${isDark ? 'bg-rojo-950/50 border-rojo-900/30 text-white placeholder-slate-700' : 'bg-white border-rojo-100 shadow-rojo-500/5'}`}
@@ -69,7 +69,7 @@ const MembersPage: React.FC = () => {
                   </div>
                   <div className="text-center border-l border-rojo-900/10">
                     <p className={`text-lg font-black ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{new Date(user.joinDate).getFullYear()}</p>
-                    <p className="text-[9px] uppercase font-black text-slate-500 tracking-tighter">Sync</p>
+                    <p className="text-[9px] uppercase font-black text-slate-500 tracking-tighter">Joined</p>
                   </div>
                 </div>
               </div>

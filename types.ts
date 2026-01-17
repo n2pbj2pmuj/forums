@@ -74,26 +74,26 @@ export interface Report {
   createdAt: string;
 }
 
-// Added Game interface for the gaming discovery section
+// Added Game interface to fix import errors in pages/Games.tsx, Details.tsx, and Dashboard.tsx
 export interface Game {
   id: string;
   title: string;
-  description: string;
   thumbnail: string;
   activePlayers: number;
   rating: number;
   creatorName: string;
   visits: number;
+  description: string;
 }
 
-// Added CatalogItem interface for the avatar shop section
+// Added CatalogItem interface to fix import errors in pages/Catalog.tsx and Details.tsx
 export interface CatalogItem {
   id: string;
   name: string;
-  description: string;
-  type: string;
+  type: 'Hat' | 'Shirt' | 'Gear' | 'Accessory';
   thumbnail: string;
+  isLimited: boolean;
   creatorName: string;
   price: number;
-  isLimited: boolean;
+  description: string;
 }

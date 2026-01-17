@@ -51,7 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   if (!currentUser) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-black' : 'bg-[#FFF8F8]'}`}>
-        <div className="text-rojo-500 font-black text-xl animate-pulse tracking-widest uppercase">Connecting...</div>
+        <div className="text-rojo-500 font-black text-xl animate-pulse tracking-widest uppercase">Connecting to Community...</div>
       </div>
     );
   }
@@ -65,7 +65,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             Logged in as: {currentUser.displayName} (@{currentUser.username})
           </div>
-          <button onClick={revertToAdmin} className="bg-black text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition shadow-lg">Back to Admin</button>
+          <button onClick={revertToAdmin} className="bg-black text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition shadow-lg">Return to Admin</button>
         </div>
       )}
 
@@ -75,9 +75,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             ROJO<span className={isDark ? 'text-white' : 'text-slate-900'}>GAMES</span>
           </Link>
           <nav className="hidden md:flex space-x-8">
-            <NavLink to="/" active={location.pathname === '/'}>Forums</NavLink>
+            <NavLink to="/" active={location.pathname === '/'}>Home</NavLink>
             <NavLink to="/members" active={location.pathname === '/members'}>Members</NavLink>
-            <NavLink to="/messages" active={location.pathname === '/messages'}>Messages</NavLink>
+            <NavLink to="/messages" active={location.pathname === '/messages'}>Chat</NavLink>
           </nav>
         </div>
 
@@ -115,7 +115,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <aside className="hidden lg:block w-64 space-y-6">
           <div className={`border rounded-2xl p-6 shadow-xl transition-all ${isDark ? 'bg-[#0e0303] border-rojo-900/40' : 'bg-white border-rojo-100'}`}>
-            <h3 className={`text-xs font-bold uppercase tracking-widest mb-4 ${isDark ? 'text-rojo-500' : 'text-rojo-600'}`}>My Profile</h3>
+            <h3 className={`text-xs font-bold uppercase tracking-widest mb-4 ${isDark ? 'text-rojo-500' : 'text-rojo-600'}`}>Member Sidebar</h3>
             <div className="flex items-center space-x-3 mb-6">
                <img src={currentUser.avatarUrl} className="w-12 h-12 rounded-lg border border-rojo-900/20" alt="" />
                <div className="min-w-0">
@@ -130,7 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <div>
                 <p className="text-xl font-bold">{currentUser.role === 'Admin' ? 'Mod' : 'User'}</p>
-                <p className="text-[10px] text-slate-500 uppercase">Role</p>
+                <p className="text-[10px] text-slate-500 uppercase">Status</p>
               </div>
             </div>
           </div>
