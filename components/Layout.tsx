@@ -24,6 +24,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return null;
   }
 
+  // Prevents crash during brief window where isAuthenticated is true but identity is still syncing
+  if (!currentUser) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#0a0202]' : 'bg-[#FFF8F8]'}`}>
+        <div className="text-rojo-500 font-black text-xl animate-pulse tracking-widest uppercase">Initializing Identity...</div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-[#0a0202] text-slate-100' : 'bg-[#FFF8F8] text-slate-900'}`}>
       

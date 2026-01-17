@@ -57,34 +57,47 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     document.documentElement.classList.toggle('light', theme === 'light');
   }, [theme]);
 
-  const mapUser = (data: any): User => ({
-    id: data.id,
-    username: data.username || 'unknown',
-    displayName: data.display_name || data.username || 'Unknown User',
-    email: data.email || '',
-    avatarUrl: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
-    bannerUrl: data.banner_url,
-    role: data.role || 'User',
-    status: data.status || 'Active',
-    joinDate: data.created_at || new Date().toISOString(),
-    postCount: data.post_count || 0,
-    about: data.about,
-    themePreference: data.theme_preference || 'dark',
-    banReason: data.ban_reason,
-    banExpires: data.ban_expires,
-  });
+  // Defensive mapping with robust defaults to prevent crashes
+  const mapUser = (data: any): User => {
+    const safeId = data?.id || 'unknown-id';
+    return {
+      id: safeId,
+      username: data?.username || `Subject_${safeId.substring(0, 5)}`,
+      displayName: data?.display_name || data?.username || 'New Citizen',
+      email: data?.email || '',
+      avatarUrl: data?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeId}`,
+      bannerUrl: data?.banner_url,
+      role: (data?.role as any) || 'User',
+      status: (data?.status as any) || 'Active',
+      joinDate: data?.created_at || new Date().toISOString(),
+      postCount: data?.post_count || 0,
+      about: data?.about || '',
+      themePreference: (data?.theme_preference as ThemeMode) || 'dark',
+      banReason: data?.ban_reason,
+      banExpires: data?.ban_expires,
+    };
+  };
 
   const fetchProfile = async (uid: string) => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error) {
-        console.warn("Profile fetch error (likely no record yet):", error.message);
-        setCurrentUser(mapUser({ id: uid }));
-      } else if (data) {
-        setCurrentUser(mapUser(data));
+      
+      if (error || !data) {
+        console.warn("User record missing in 'profiles' table. Generating defensive fallback identity.");
+        // We set a fallback user immediately so the UI has valid data to render
+        const fallback = mapUser({ id: uid });
+        setCurrentUser(fallback);
+        return fallback;
       }
+      
+      const mapped = mapUser(data);
+      setCurrentUser(mapped);
+      return mapped;
     } catch (err) {
-      console.error("Critical profile fetch failure:", err);
+      console.error("Critical identity sync failure:", err);
+      const fallback = mapUser({ id: uid });
+      setCurrentUser(fallback);
+      return fallback;
     }
   };
 
@@ -144,19 +157,23 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.error("Database sync failed:", err);
+      console.error("Database broadcast sync failed:", err);
     }
   };
 
   useEffect(() => {
     const initSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setIsAuthenticated(true);
-        await fetchProfile(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // fetchProfile always sets a valid user object or fallback
+          await fetchProfile(session.user.id);
+          setIsAuthenticated(true);
+        }
+        await syncDatabase();
+      } finally {
+        setLoading(false);
       }
-      await syncDatabase();
-      setLoading(false);
     };
 
     initSession();
@@ -164,8 +181,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session) {
-          setIsAuthenticated(true);
           await fetchProfile(session.user.id);
+          setIsAuthenticated(true);
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
@@ -182,10 +199,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     
-    // Explicitly update state on success to avoid waiting for the onAuthStateChange listener
     if (data.session) {
-      setIsAuthenticated(true);
+      // Ensure profile is established BEFORE navigating or allowing access
       await fetchProfile(data.user.id);
+      setIsAuthenticated(true);
     }
   };
 
@@ -193,6 +210,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data, error } = await supabase.auth.signUp({ email, password: pass });
     if (error) throw error;
     if (data.user) {
+      // Initial profile creation
       await supabase.from('profiles').insert({
         id: data.user.id,
         username,
@@ -219,6 +237,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const logout = async () => {
     await supabase.auth.signOut();
     setOriginalAdmin(null);
+    setCurrentUser(null);
+    setIsAuthenticated(false);
   };
 
   const loginAs = (userId: string) => {

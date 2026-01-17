@@ -36,16 +36,30 @@ const ProtectedRoutes: React.FC = () => {
   const location = useLocation();
 
   if (loading) {
-    return <div className="min-h-screen bg-rojo-950 flex items-center justify-center text-rojo-500 font-black text-xl animate-pulse uppercase tracking-[0.5em]">Syncing...</div>;
+    return (
+      <div className="min-h-screen bg-rojo-950 flex flex-col items-center justify-center">
+        <div className="text-rojo-500 font-black text-2xl animate-pulse uppercase tracking-[0.4em] mb-4">Establishing Uplink</div>
+        <div className="w-48 h-1 bg-rojo-900/30 rounded-full overflow-hidden">
+          <div className="w-1/2 h-full bg-rojo-500 animate-[loading_2s_infinite]"></div>
+        </div>
+        <style>{`
+          @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+        `}</style>
+      </div>
+    );
   }
 
   // Exempt routes that should be accessible without auth (like password reset)
-  const isExempt = location.pathname === '/signup' || location.pathname === '/forgot-password';
+  const isExempt = location.pathname === '/signup' || location.pathname === '/forgot-password' || location.pathname === '/login';
 
   if (!isAuthenticated && !isExempt) {
-    return <LoginPage />;
+    return <Navigate to="/login" />;
   }
 
+  // Double check currentUser exists before checking properties like status
   if (currentUser?.status === 'Banned' && location.pathname !== '/banned') {
     return <Navigate to="/banned" />;
   }
@@ -62,7 +76,7 @@ const ProtectedRoutes: React.FC = () => {
       <Route path="/members" element={<MembersPage />} />
       <Route path="/banned" element={<BannedPage />} />
       <Route path="/update-password" element={<UpdatePasswordPage />} />
-      <Route path="*" element={<HomePage />} />
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
 };
