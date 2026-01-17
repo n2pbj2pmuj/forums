@@ -6,7 +6,8 @@ import { Link } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   return (
-    <Layout activeBanner="Welcome to the BlocVerse Spring Event! Collect eggs to win prizes!">
+    /* Removed non-existent activeBanner prop from Layout component */
+    <Layout>
       <div className="flex flex-col space-y-8">
         {/* Welcome Section */}
         <div className="flex items-center space-x-6">

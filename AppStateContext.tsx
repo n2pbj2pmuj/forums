@@ -19,6 +19,7 @@ interface AppState {
   revertToAdmin: () => void;
   toggleTheme: () => void;
   updateUser: (data: Partial<User>) => void;
+  updateTargetUser: (userId: string, data: Partial<User>) => void; 
   banUser: (userId: string, reason: string, duration: string) => void;
   unbanUser: (userId: string) => void;
   addThread: (title: string, content: string, categoryId: string) => void;
@@ -45,8 +46,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS.map(p => ({ ...p, likedBy: [] })));
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
   const [assets, setAssets] = useState<SiteAsset[]>([
-    { id: 'b1', name: 'Cyber Monday Sale', imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80', type: 'Banner', isActive: true },
-    { id: 'b2', name: 'Security Alert', imageUrl: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc48?auto=format&fit=crop&w=1200&q=80', type: 'Banner', isActive: false }
+    { id: 'b1', name: 'Platform Optimization Status', imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80', type: 'Banner', isActive: true },
+    { id: 'b2', name: 'Security Protocol Red', imageUrl: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc48?auto=format&fit=crop&w=1200&q=80', type: 'Banner', isActive: false }
   ]);
 
   useEffect(() => {
@@ -60,11 +61,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentUser(found);
       setIsAuthenticated(true);
     } else {
-      // Create a default user if not found in mock data
       const newUser: User = {
         ...CURRENT_USER,
         id: `u-${Date.now()}`,
         username,
+        email: `${username}@placeholder.net`,
         displayName: username,
         role: 'User',
       };
@@ -99,6 +100,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateUser = (data: Partial<User>) => {
     setCurrentUser(prev => ({ ...prev, ...data }));
     setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
+  };
+
+  const updateTargetUser = (userId: string, data: Partial<User>) => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
   };
 
   const banUser = (userId: string, reason: string, duration: string) => {
@@ -194,7 +199,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, assets, theme,
-      toggleTheme, updateUser, banUser, unbanUser, addThread, 
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, 
       toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost, resolveReport, addReport, updateGlobalBanner, addGlobalAsset
     }}>
       {children}

@@ -18,6 +18,7 @@ export interface User {
   id: string;
   username: string;
   displayName: string;
+  email: string;
   avatarUrl: string;
   bannerUrl?: string;
   role: 'User' | 'Moderator' | 'Admin';
@@ -80,32 +81,4 @@ export interface Report {
   contentSnippet: string;
   status: ModStatus;
   createdAt: string;
-}
-
-/**
- * Interface representing a game in the platform.
- */
-export interface Game {
-  id: string;
-  title: string;
-  thumbnail: string;
-  activePlayers: number;
-  rating: number;
-  creatorName: string;
-  visits: number;
-  description: string;
-}
-
-/**
- * Interface representing an item in the avatar shop catalog.
- */
-export interface CatalogItem {
-  id: string;
-  name: string;
-  thumbnail: string;
-  type: string;
-  creatorName: string;
-  price: number;
-  isLimited: boolean;
-  description: string;
 }

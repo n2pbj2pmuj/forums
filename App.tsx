@@ -42,7 +42,7 @@ const ProtectedRoutes: React.FC = () => {
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/members" element={<MembersPage />} />
       
-      {/* Fallback to Home */}
+      {/* Release cleanup: Remove Games/Catalog legacy routes */}
       <Route path="*" element={<HomePage />} />
     </Routes>
   );
