@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useAppState } from '../AppStateContext';
+import { useAppState, censorText } from '../AppStateContext';
 import Layout from '../components/Layout';
 import { ReportType } from '../types';
+import { DEFAULT_AVATAR } from '../constants';
 
 const ThreadDetailPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { 
-    threads, posts, currentUser, theme,
+    threads, posts, currentUser, theme, users,
     addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView
   } = useAppState();
   const [replyText, setReplyText] = useState('');
@@ -35,6 +36,8 @@ const ThreadDetailPage: React.FC = () => {
   };
 
   const isThreadLiked = thread.likedBy?.includes(currentUser?.id || '');
+  const threadAuthor = users.find(u => u.id === thread.authorId);
+  const isThreadAuthorBanned = threadAuthor?.status === 'Banned';
 
   return (
     <Layout>
@@ -56,10 +59,14 @@ const ThreadDetailPage: React.FC = () => {
         <div className={`border rounded-3xl overflow-hidden shadow-2xl transition-all ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
           <div className="flex flex-col md:flex-row">
             <div className={`w-full md:w-48 p-8 flex flex-col items-center text-center border-b md:border-b-0 md:border-r ${isDark ? 'bg-rojo-950/20 border-rojo-900/20' : 'bg-rojo-50 border-rojo-100'}`}>
-              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black mb-4 border ${isDark ? 'bg-black border-rojo-900/50 text-rojo-500 shadow-xl shadow-rojo-500/5' : 'bg-white border-rojo-100 text-rojo-600'}`}>
-                {thread.authorName.charAt(0)}
+              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black mb-4 border overflow-hidden ${isDark ? 'bg-black border-rojo-900/50 text-rojo-500 shadow-xl shadow-rojo-500/5' : 'bg-white border-rojo-100 text-rojo-600'}`}>
+                {isThreadAuthorBanned ? (
+                  <img src={DEFAULT_AVATAR} className="w-full h-full object-cover" alt="" />
+                ) : (
+                  threadAuthor?.avatarUrl ? <img src={threadAuthor.avatarUrl} className="w-full h-full object-cover" alt="" /> : thread.authorName.charAt(0)
+                )}
               </div>
-              <p className="font-black truncate w-full">@{thread.authorName}</p>
+              <p className={`font-black truncate w-full ${isThreadAuthorBanned ? 'line-through decoration-slate-500 opacity-60' : ''}`}>@{thread.authorName}</p>
               <p className="text-[9px] font-black uppercase text-slate-500 mt-1">Author</p>
             </div>
             <div className="flex-1 p-10 flex flex-col">
@@ -67,7 +74,9 @@ const ThreadDetailPage: React.FC = () => {
                 <h1 className="text-3xl font-black tracking-tight">{thread.title}</h1>
                 <span className="text-[10px] font-black uppercase text-slate-600">{new Date(thread.createdAt).toLocaleString()}</span>
               </div>
-              <div className={`leading-relaxed mb-10 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{thread.content}</div>
+              <div className={`leading-relaxed mb-10 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                {isThreadAuthorBanned ? censorText(thread.content) : thread.content}
+              </div>
               <div className="flex items-center justify-between border-t border-rojo-900/10 pt-6">
                 <div className="flex items-center gap-6">
                   <button onClick={() => likeThread(thread.id)} className={`flex items-center gap-2 font-black text-xs uppercase transition-all hover:scale-105 ${isThreadLiked ? 'text-rojo-500' : 'text-slate-500 hover:text-rojo-400'}`}>
@@ -85,16 +94,25 @@ const ThreadDetailPage: React.FC = () => {
           <h2 className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-2">{threadPosts.length} Replies</h2>
           {threadPosts.map(post => {
             const isLiked = post.likedBy?.includes(currentUser?.id || '');
+            const postAuthor = users.find(u => u.id === post.authorId);
+            const isPostAuthorBanned = postAuthor?.status === 'Banned';
+
             return (
               <div key={post.id} id={post.id} className={`border rounded-[2rem] overflow-hidden shadow-lg flex transition-all ${isDark ? 'bg-black/40 border-rojo-900/20' : 'bg-white border-rojo-100'}`}>
                 <div className={`w-16 md:w-32 p-4 flex flex-col items-center text-center shrink-0 border-r ${isDark ? 'bg-rojo-950/10 border-rojo-900/10' : 'bg-rojo-50 border-rojo-100'}`}>
-                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center text-lg font-black mb-2 border ${isDark ? 'bg-black border-rojo-900/30 text-slate-500' : 'bg-white border-rojo-100 text-slate-600'}`}>
-                    {post.authorName.charAt(0)}
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center text-lg font-black mb-2 border overflow-hidden ${isDark ? 'bg-black border-rojo-900/30 text-slate-500' : 'bg-white border-rojo-100 text-slate-600'}`}>
+                    {isPostAuthorBanned ? (
+                      <img src={DEFAULT_AVATAR} className="w-full h-full object-cover" alt="" />
+                    ) : (
+                      postAuthor?.avatarUrl ? <img src={postAuthor.avatarUrl} className="w-full h-full object-cover" alt="" /> : post.authorName.charAt(0)
+                    )}
                   </div>
-                  <p className="text-[9px] font-black truncate w-full text-slate-400">@{post.authorName}</p>
+                  <p className={`text-[9px] font-black truncate w-full text-slate-400 ${isPostAuthorBanned ? 'line-through decoration-slate-600 opacity-60' : ''}`}>@{post.authorName}</p>
                 </div>
                 <div className="flex-1 p-6">
-                  <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{post.content}</p>
+                  <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    {isPostAuthorBanned ? censorText(post.content) : post.content}
+                  </p>
                   <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold uppercase">
                      <span>{new Date(post.createdAt).toLocaleDateString()}</span>
                      <div className="flex items-center space-x-6">

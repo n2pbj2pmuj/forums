@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './types';
 import { supabase } from './services/supabaseClient';
+import { DEFAULT_AVATAR } from './constants';
 
 interface ChatMessage {
   id: string;
@@ -51,6 +52,11 @@ interface AppState {
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
 
+// Helper for censoring text
+export const censorText = (text: string) => {
+  return text.split('').map(char => (char === ' ' || char === '\n' ? char : '█')).join('');
+};
+
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +83,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       username: username,
       displayName: data.display_name || metadata.display_name || username || email.split('@')[0] || 'User',
       email: email,
-      avatarUrl: data.avatar_url || metadata.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
+      avatarUrl: data.avatar_url || metadata.avatar_url || DEFAULT_AVATAR,
       bannerUrl: data.banner_url || metadata.banner_url,
       role: data.role || 'User',
       status: (data.status as any) || 'Active',
@@ -93,10 +99,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const syncDatabase = async () => {
     try {
       const results = await Promise.allSettled([
-        supabase.from('threads').select('*, profiles(username, display_name)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
+        supabase.from('threads').select('*, profiles(username, display_name, status)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
-        supabase.from('posts').select('*, profiles(username, display_name)').order('created_at', { ascending: true })
+        supabase.from('posts').select('*, profiles(username, display_name, status)').order('created_at', { ascending: true })
       ]);
 
       const [threadsRes, usersRes, reportsRes, postsRes] = results as any[];
@@ -116,7 +122,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setReports(reportsRes.value.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
           authorUsername: x.author_username, targetUrl: x.target_url,
-          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
         })));
       }
       if (postsRes.status === 'fulfilled' && postsRes.value.data) {
@@ -150,7 +156,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!error && data) {
       const u = mapUser(data);
       setCurrentUser(u);
-      // Sync local user status with database status immediately
       if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
     }
   };

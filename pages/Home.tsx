@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 import { useAppState } from '../AppStateContext';
 import Layout from '../components/Layout';
 import { Link } from 'react-router-dom';
+import { DEFAULT_AVATAR } from '../constants';
 
 const HomePage: React.FC = () => {
-  const { threads, addThread, theme } = useAppState();
+  const { threads, addThread, theme, users } = useAppState();
   const [showModal, setShowModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
@@ -52,39 +53,47 @@ const HomePage: React.FC = () => {
         </div>
 
         <div className={`border rounded-2xl overflow-hidden shadow-xl ${isDark ? 'bg-black/40 border-rojo-900/30 divide-y divide-rojo-900/10' : 'bg-white border-slate-200 divide-y divide-slate-100'}`}>
-          {filteredThreads.length > 0 ? filteredThreads.map(thread => (
-            <div key={thread.id} className={`p-6 transition-all group cursor-pointer ${isDark ? 'hover:bg-rojo-900/10' : 'hover:bg-rojo-50'}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex space-x-4 min-w-0 flex-1">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg border shrink-0 ${isDark ? 'bg-rojo-950 border-rojo-900/30 text-rojo-500' : 'bg-rojo-50 border-rojo-100 text-rojo-600'}`}>
-                    {thread.authorName.charAt(0)}
+          {filteredThreads.length > 0 ? filteredThreads.map(thread => {
+            const author = users.find(u => u.id === thread.authorId);
+            const isBanned = author?.status === 'Banned';
+            return (
+              <div key={thread.id} className={`p-6 transition-all group cursor-pointer ${isDark ? 'hover:bg-rojo-900/10' : 'hover:bg-rojo-50'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex space-x-4 min-w-0 flex-1">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg border shrink-0 overflow-hidden ${isDark ? 'bg-rojo-950 border-rojo-900/30 text-rojo-500' : 'bg-rojo-50 border-rojo-100 text-rojo-600'}`}>
+                      {isBanned ? (
+                         <img src={DEFAULT_AVATAR} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                        thread.authorName.charAt(0)
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <Link to={`/thread/${thread.id}`} className={`text-lg font-bold tracking-tight block mb-1 truncate ${isDark ? 'text-slate-100 hover:text-rojo-500' : 'text-slate-900 hover:text-rojo-600'}`}>
+                        {thread.isPinned && <span className="mr-2 text-rojo-500">📌</span>}
+                        {thread.title}
+                        {thread.isLocked && <span className="ml-2 text-slate-500 text-xs">🔒</span>}
+                      </Link>
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
+                        <span className={`text-rojo-500 ${isBanned ? 'line-through decoration-slate-400' : ''}`}>@{thread.authorName}</span>
+                        <span>•</span>
+                        <span>{new Date(thread.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <Link to={`/thread/${thread.id}`} className={`text-lg font-bold tracking-tight block mb-1 truncate ${isDark ? 'text-slate-100 hover:text-rojo-500' : 'text-slate-900 hover:text-rojo-600'}`}>
-                      {thread.isPinned && <span className="mr-2 text-rojo-500">📌</span>}
-                      {thread.title}
-                      {thread.isLocked && <span className="ml-2 text-slate-500 text-xs">🔒</span>}
-                    </Link>
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                      <span className="text-rojo-500">@{thread.authorName}</span>
-                      <span>•</span>
-                      <span>{new Date(thread.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center space-x-6 shrink-0">
+                    <div className="text-center">
+                      <p className="text-lg font-bold">{thread.replyCount}</p>
+                      <p className="text-[9px] uppercase font-bold text-slate-500">Replies</p>
+                    </div>
+                    <div className="text-center hidden sm:block">
+                      <p className="text-lg font-bold">{thread.viewCount}</p>
+                      <p className="text-[9px] uppercase font-bold text-slate-500">Views</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-6 shrink-0">
-                  <div className="text-center">
-                    <p className="text-lg font-bold">{thread.replyCount}</p>
-                    <p className="text-[9px] uppercase font-bold text-slate-500">Replies</p>
-                  </div>
-                  <div className="text-center hidden sm:block">
-                    <p className="text-lg font-bold">{thread.viewCount}</p>
-                    <p className="text-[9px] uppercase font-bold text-slate-500">Views</p>
-                  </div>
-                </div>
               </div>
-            </div>
-          )) : (
+            );
+          }) : (
             <div className="p-20 text-center opacity-40">
               <p className="text-slate-500 font-bold uppercase text-sm">No topics found.</p>
             </div>

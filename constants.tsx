@@ -1,7 +1,7 @@
 
 import { User, ForumCategory, Thread, Post, Report, ReportType, ModStatus, Game, CatalogItem } from './types';
 
-export const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/avataaars/svg?seed=default';
+export const DEFAULT_AVATAR = 'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png?ex=696cb789&is=696b6609&hm=0c8df9305778f1c93fcbb819b089c165a1d54676562121955d4ade1b952efa99&';
 
 export const CURRENT_USER: User = {
   id: 'u-admin',
@@ -57,10 +57,8 @@ export const MOCK_THREADS: Thread[] = [
 ];
 
 export const MOCK_POSTS: Post[] = [];
-
 export const MOCK_REPORTS: Report[] = [];
 
-// Fixed error: Module '"../constants"' has no exported member 'MOCK_GAMES'
 export const MOCK_GAMES: Game[] = [
   {
     id: 'g1',
@@ -71,30 +69,9 @@ export const MOCK_GAMES: Game[] = [
     rating: 92,
     visits: 4500000,
     description: 'Work with others to fulfill food orders and use your earnings to upgrade your house and buy furniture!'
-  },
-  {
-    id: 'g2',
-    title: 'Blox Fruits',
-    thumbnail: 'https://picsum.photos/seed/fruits/400/225',
-    activePlayers: 450000,
-    creatorName: 'Gamer Robot',
-    rating: 95,
-    visits: 25000000,
-    description: 'Welcome to Blox Fruits! Become a master swordsman or a powerful blox fruit user as you train to become the strongest player to ever live.'
-  },
-  {
-    id: 'g3',
-    title: 'Adopt Me!',
-    thumbnail: 'https://picsum.photos/seed/adopt/400/225',
-    activePlayers: 180000,
-    creatorName: 'DreamCraft',
-    rating: 90,
-    visits: 35000000,
-    description: 'The #1 place to raise cute pets and decorate your house with friends!'
   }
 ];
 
-// Fixed error: Module '"../constants"' has no exported member 'MOCK_CATALOG'
 export const MOCK_CATALOG: CatalogItem[] = [
   {
     id: 'i1',
@@ -105,25 +82,5 @@ export const MOCK_CATALOG: CatalogItem[] = [
     creatorName: 'RojoGames',
     price: 50000,
     description: 'A legendary crimson helm for the bravest warriors.'
-  },
-  {
-    id: 'i2',
-    name: 'Classic Fedora',
-    thumbnail: 'https://picsum.photos/seed/fedora/300/300',
-    type: 'Hat',
-    isLimited: false,
-    creatorName: 'RojoGames',
-    price: 250,
-    description: 'A timeless piece of headwear for the sophisticated player.'
-  },
-  {
-    id: 'i3',
-    name: 'Rojo Community Tee',
-    thumbnail: 'https://picsum.photos/seed/shirt/300/300',
-    type: 'Shirt',
-    isLimited: false,
-    creatorName: 'RojoGames',
-    price: 0,
-    description: 'Official community shirt. Show your pride!'
   }
 ];
