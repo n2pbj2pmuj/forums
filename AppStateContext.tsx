@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, SiteAsset } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './types';
 import { supabase } from './services/supabaseClient';
 
 interface AppState {
@@ -11,7 +11,6 @@ interface AppState {
   threads: Thread[];
   posts: Post[];
   reports: Report[];
-  assets: SiteAsset[];
   theme: ThemeMode;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
@@ -32,8 +31,6 @@ interface AppState {
   deleteThread: (threadId: string) => Promise<void>;
   addPost: (threadId: string, content: string) => Promise<void>;
   likePost: (postId: string) => Promise<void>;
-  updateGlobalBanner: (assetId: string) => Promise<void>;
-  addGlobalAsset: (name: string, url: string) => Promise<void>;
   resolveReport: (reportId: string, status: ModStatus) => Promise<void>;
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string) => Promise<void>;
 }
@@ -50,20 +47,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [threads, setThreads] = useState<Thread[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
-  const [assets, setAssets] = useState<SiteAsset[]>([]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.classList.toggle('light', theme === 'light');
   }, [theme]);
 
-  // Defensive mapping with robust defaults to prevent crashes
   const mapUser = (data: any): User => {
-    const safeId = data?.id || 'unknown-id';
+    const safeId = data?.id || 'guest';
     return {
       id: safeId,
-      username: data?.username || `Subject_${safeId.substring(0, 5)}`,
-      displayName: data?.display_name || data?.username || 'New Citizen',
+      username: data?.username || `User_${safeId.substring(0, 5)}`,
+      displayName: data?.display_name || data?.username || 'New Member',
       email: data?.email || '',
       avatarUrl: data?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeId}`,
       bannerUrl: data?.banner_url,
@@ -79,21 +74,23 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const fetchProfile = async (uid: string) => {
+    console.log(`[Session] Fetching profile for UID: ${uid}`);
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       
       if (error || !data) {
-        console.warn("User record missing in 'profiles' table. Generating defensive fallback identity.");
+        console.warn("[Session] Profile not found in database. Using fallback guest profile.");
         const fallback = mapUser({ id: uid });
         setCurrentUser(fallback);
         return fallback;
       }
       
+      console.log("[Session] Profile loaded successfully.");
       const mapped = mapUser(data);
       setCurrentUser(mapped);
       return mapped;
     } catch (err) {
-      console.error("Critical identity sync failure:", err);
+      console.error("[Session] Critical profile fetch error:", err);
       const fallback = mapUser({ id: uid });
       setCurrentUser(fallback);
       return fallback;
@@ -102,11 +99,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const syncDatabase = async () => {
     try {
-      const [threadsRes, postsRes, usersRes, assetsRes, reportsRes] = await Promise.all([
+      const [threadsRes, postsRes, usersRes, reportsRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name)'),
         supabase.from('profiles').select('*'),
-        supabase.from('assets').select('*'),
         supabase.from('reports').select('*').order('created_at', { ascending: false })
       ]);
 
@@ -136,14 +132,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       })));
 
       if (usersRes.data) setUsers(usersRes.data.map(x => mapUser(x)));
-      
-      if (assetsRes.data) setAssets(assetsRes.data.map(x => ({
-        id: x.id,
-        name: x.name,
-        imageUrl: x.image_url,
-        type: x.type,
-        isActive: x.is_active || false
-      })));
 
       if (reportsRes.data) setReports(reportsRes.data.map(x => ({
         id: x.id,
@@ -156,20 +144,33 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.error("Database broadcast sync failed:", err);
+      console.error("[Sync] Database broadcast sync failed:", err);
     }
   };
 
   useEffect(() => {
     const initSession = async () => {
+      console.log("[Session] Initializing forum session...");
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error("[Session] Error checking session:", sessionError);
+        }
+
         if (session) {
+          console.log("[Session] Active session found. Restoring...");
           await fetchProfile(session.user.id);
           setIsAuthenticated(true);
+        } else {
+          console.log("[Session] No active session. Loading as guest.");
         }
+        
         await syncDatabase();
+      } catch (err) {
+        console.error("[Session] Unhandled error during init:", err);
       } finally {
+        console.log("[Session] Init complete. Turning off loading screen.");
         setLoading(false);
       }
     };
@@ -177,6 +178,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     initSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[Auth] Event: ${event}`);
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session) {
           await fetchProfile(session.user.id);
@@ -185,8 +187,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthenticated(false);
-      } else if (event === 'PASSWORD_RECOVERY') {
-        setIsAuthenticated(true);
       }
     });
 
@@ -208,17 +208,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       email: email, 
       password: pass,
       options: {
-        data: {
-          username: username // Critical part: Pass to raw_user_meta_data for triggers
-        }
+        data: { username }
       }
     });
 
     if (error) throw error;
 
     if (data.user) {
-      // Manual upsert in case the database trigger hasn't fired yet
-      // This prevents "Identity not found" issues on the very first redirect
       await supabase.from('profiles').upsert({
         id: data.user.id,
         username,
@@ -354,17 +350,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  const updateGlobalBanner = async (assetId: string) => {
-    await supabase.from('assets').update({ is_active: false }).neq('id', 'temp'); 
-    await supabase.from('assets').update({ is_active: true }).eq('id', assetId);
-    await syncDatabase();
-  };
-
-  const addGlobalAsset = async (name: string, url: string) => {
-    await supabase.from('assets').insert({ name, image_url: url });
-    await syncDatabase();
-  };
-
   const resolveReport = async (reportId: string, status: ModStatus) => {
     await supabase.from('reports').update({ status }).eq('id', reportId);
     await syncDatabase();
@@ -385,9 +370,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <AppStateContext.Provider value={{
-      isAuthenticated, login, signup, resetPassword, updatePassword, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, assets, theme, loading,
+      isAuthenticated, login, signup, resetPassword, updatePassword, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, 
-      toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost, updateGlobalBanner, addGlobalAsset,
+      toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost,
       resolveReport, addReport
     }}>
       {children}

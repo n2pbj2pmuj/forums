@@ -1,10 +1,10 @@
 
-import { User, ForumCategory, Thread, Post, Report, ReportType, ModStatus } from './types';
+import { User, ForumCategory, Thread, Post, Report, ReportType, ModStatus, Game, CatalogItem } from './types';
 
 export const CURRENT_USER: User = {
   id: 'u-admin',
   username: 'RojoAdmin',
-  displayName: 'Rojo Administrator',
+  displayName: 'Admin',
   email: 'admin@rojos.games',
   avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=RojoAdmin',
   role: 'Admin',
@@ -19,7 +19,7 @@ export const ADMIN_USER = CURRENT_USER;
 export const MOCK_USERS: User[] = [
   { 
     id: 'u1', 
-    username: 'ViperGrid', 
+    username: 'Viper', 
     displayName: 'Viper', 
     email: 'viper@rojos.games',
     avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Viper', 
@@ -31,7 +31,7 @@ export const MOCK_USERS: User[] = [
   },
   { 
     id: 'u2', 
-    username: 'NeonProtocol', 
+    username: 'Neon', 
     displayName: 'Neon', 
     email: 'neon@rojos.games',
     avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Neon', 
@@ -44,7 +44,7 @@ export const MOCK_USERS: User[] = [
   { 
     id: 'u3', 
     username: 'Mod_Sarah', 
-    displayName: 'Sarah Jenkins', 
+    displayName: 'Sarah', 
     email: 'sarah@rojos.games',
     avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', 
     role: 'Moderator', 
@@ -56,8 +56,8 @@ export const MOCK_USERS: User[] = [
 ];
 
 export const MOCK_CATEGORIES: ForumCategory[] = [
-  { id: 'cat1', title: 'Grid Announcements', description: 'Official updates from the RojosGames core team.', icon: '🔴', threadCount: 1 },
-  { id: 'cat2', title: 'Community Sector', description: 'General discussion and social sync.', icon: '🍷', threadCount: 1 },
+  { id: 'cat1', title: 'Announcements', description: 'Official updates and news.', icon: '📢', threadCount: 1 },
+  { id: 'cat2', title: 'General Discussion', description: 'Talk about anything community related.', icon: '💬', threadCount: 1 },
 ];
 
 export const MOCK_THREADS: Thread[] = [
@@ -65,9 +65,9 @@ export const MOCK_THREADS: Thread[] = [
     id: 't1', 
     categoryId: 'cat1', 
     authorId: 'u-admin', 
-    authorName: 'RojoAdmin', 
-    title: 'Platform Maintenance: Jan 2026', 
-    content: 'We are purging legacy game modules to optimize for forum performance.', 
+    authorName: 'Admin', 
+    title: 'Welcome to the New RojoGames Forums', 
+    content: 'We have updated our platform to focus on community discussion and simplified our user interface.', 
     createdAt: '2026-01-09T10:00:00Z', 
     replyCount: 0, 
     viewCount: 42, 
@@ -84,57 +84,77 @@ export const MOCK_REPORTS: Report[] = [
     type: ReportType.USER, 
     targetId: 'u1', 
     reportedBy: 'u2', 
-    reason: 'Suspicious Identity Activity', 
-    contentSnippet: 'Identity scan required.', 
+    reason: 'Inappropriate behavior', 
+    contentSnippet: 'Review required.', 
     status: ModStatus.PENDING, 
     createdAt: '2026-01-09T17:00:00Z' 
   }
 ];
 
-// Added missing MOCK_GAMES for legacy pages
-export const MOCK_GAMES = [
-  { 
-    id: 'g1', 
-    title: 'Speed Run 4', 
-    thumbnail: 'https://picsum.photos/seed/sr4/400/225', 
-    activePlayers: 1200, 
-    rating: 89, 
-    creatorName: 'ViperGrid', 
-    visits: 500000, 
-    description: 'Fast paced racing action in the grid.' 
+// Mock games data for discovery section
+export const MOCK_GAMES: Game[] = [
+  {
+    id: 'g1',
+    title: 'Neon Strike',
+    description: 'A high-octane cyberpunk shooter where strategy meets speed.',
+    thumbnail: 'https://picsum.photos/seed/neonstrike/400/225',
+    activePlayers: 1250,
+    rating: 92,
+    creatorName: 'RojoDev',
+    visits: 500000
   },
-  { 
-    id: 'g2', 
-    title: 'Pizza Tycoon', 
-    thumbnail: 'https://picsum.photos/seed/pt/400/225', 
-    activePlayers: 800, 
-    rating: 85, 
-    creatorName: 'NeonProtocol', 
-    visits: 200000, 
-    description: 'Build your own pizza empire in the digital sector.' 
+  {
+    id: 'g2',
+    title: 'Cyber Runner',
+    description: 'Infinite parkour in a digital world of lights and danger.',
+    thumbnail: 'https://picsum.photos/seed/cyberrunner/400/225',
+    activePlayers: 850,
+    rating: 88,
+    creatorName: 'NeonGames',
+    visits: 320000
   },
+  {
+    id: 'g3',
+    title: 'Grid Legends',
+    description: 'Competitive racing on the digital grid. High stakes, high speed.',
+    thumbnail: 'https://picsum.photos/seed/gridlegends/400/225',
+    activePlayers: 2100,
+    rating: 95,
+    creatorName: 'RojoAdmin',
+    visits: 1200000
+  }
 ];
 
-// Added missing MOCK_CATALOG for legacy pages
-export const MOCK_CATALOG = [
-  { 
-    id: 'i1', 
-    name: 'Cyberpunk Visor', 
-    type: 'Hat', 
-    thumbnail: 'https://picsum.photos/seed/cv/300/300', 
-    creatorName: 'RojoAdmin', 
-    price: 250, 
-    isLimited: true, 
-    description: 'High-tech optics for advanced grid navigation.' 
+// Mock catalog data for avatar shop
+export const MOCK_CATALOG: CatalogItem[] = [
+  {
+    id: 'i1',
+    name: 'Red Samurai Helmet',
+    description: 'A legendary helmet for the modern digital warrior.',
+    type: 'Hat',
+    thumbnail: 'https://api.dicebear.com/7.x/bottts/svg?seed=helmet',
+    creatorName: 'RojoAdmin',
+    price: 500,
+    isLimited: true
   },
-  { 
-    id: 'i2', 
-    name: 'Neon Hoodie', 
-    type: 'Shirt', 
-    thumbnail: 'https://picsum.photos/seed/nh/300/300', 
-    creatorName: 'NeonProtocol', 
-    price: 0, 
-    isLimited: false, 
-    description: 'Glow in the dark style for low-light sectors.' 
+  {
+    id: 'i2',
+    name: 'Cyber Suit',
+    description: 'The latest in digital fashion. Sleek and efficient.',
+    type: 'Shirt',
+    thumbnail: 'https://api.dicebear.com/7.x/bottts/svg?seed=suit',
+    creatorName: 'NeonDev',
+    price: 0,
+    isLimited: false
   },
+  {
+    id: 'i3',
+    name: 'Laser Katana',
+    description: 'Slices through data and opponents with ease.',
+    type: 'Gear',
+    thumbnail: 'https://api.dicebear.com/7.x/bottts/svg?seed=katana',
+    creatorName: 'Viper',
+    price: 1500,
+    isLimited: true
+  }
 ];

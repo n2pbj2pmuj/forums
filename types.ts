@@ -8,8 +8,7 @@ export enum ModStatus {
 export enum ReportType {
   POST = 'POST',
   THREAD = 'THREAD',
-  USER = 'USER',
-  ASSET = 'ASSET'
+  USER = 'USER'
 }
 
 export type ThemeMode = 'light' | 'dark';
@@ -64,14 +63,6 @@ export interface Post {
   likedBy: string[];
 }
 
-export interface SiteAsset {
-  id: string;
-  name: string;
-  imageUrl: string;
-  type: 'Banner' | 'GlobalAlert';
-  isActive: boolean;
-}
-
 export interface Report {
   id: string;
   type: ReportType;
@@ -81,4 +72,28 @@ export interface Report {
   contentSnippet: string;
   status: ModStatus;
   createdAt: string;
+}
+
+// Added Game interface for the gaming discovery section
+export interface Game {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  activePlayers: number;
+  rating: number;
+  creatorName: string;
+  visits: number;
+}
+
+// Added CatalogItem interface for the avatar shop section
+export interface CatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  thumbnail: string;
+  creatorName: string;
+  price: number;
+  isLimited: boolean;
 }

@@ -37,8 +37,8 @@ const ProtectedRoutes: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-rojo-950 flex flex-col items-center justify-center">
-        <div className="text-rojo-500 font-black text-2xl animate-pulse uppercase tracking-[0.4em] mb-4">Establishing Uplink</div>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
+        <div className="text-rojo-500 font-black text-2xl animate-pulse uppercase tracking-[0.2em] mb-4">Connecting...</div>
         <div className="w-48 h-1 bg-rojo-900/30 rounded-full overflow-hidden">
           <div className="w-1/2 h-full bg-rojo-500 animate-[loading_2s_infinite]"></div>
         </div>
@@ -52,14 +52,12 @@ const ProtectedRoutes: React.FC = () => {
     );
   }
 
-  // Exempt routes that should be accessible without auth (like password reset)
   const isExempt = location.pathname === '/signup' || location.pathname === '/forgot-password' || location.pathname === '/login';
 
   if (!isAuthenticated && !isExempt) {
     return <Navigate to="/login" />;
   }
 
-  // Double check currentUser exists before checking properties like status
   if (currentUser?.status === 'Banned' && location.pathname !== '/banned') {
     return <Navigate to="/banned" />;
   }
