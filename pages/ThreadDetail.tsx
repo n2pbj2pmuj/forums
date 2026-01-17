@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppState, censorText } from '../AppStateContext';
 import Layout from '../components/Layout';
@@ -9,6 +9,7 @@ import { DEFAULT_AVATAR } from '../constants';
 const MediaRenderer: React.FC<{ content: string; isBanned: boolean }> = ({ content, isBanned }) => {
   if (isBanned) return <div className="font-mono break-all">{censorText(content)}</div>;
 
+  // Split content by URLs to render them as blocks if they are media
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = content.split(urlRegex);
 
@@ -18,21 +19,21 @@ const MediaRenderer: React.FC<{ content: string; isBanned: boolean }> = ({ conte
         if (part.match(urlRegex)) {
           const lowerPart = part.toLowerCase();
           
-          // Image/GIF detection
-          if (lowerPart.match(/\.(jpeg|jpg|gif|png|webp|svg)/)) {
+          // Image/GIF detection (including data URLs)
+          if (lowerPart.match(/\.(jpeg|jpg|gif|png|webp|svg)/) || lowerPart.startsWith('data:image/')) {
             return (
               <div key={i} className="my-4 max-w-full">
-                <img src={part} alt="Post content" className="max-h-[500px] rounded-2xl border border-rojo-900/10 shadow-lg object-contain bg-black/5" />
+                <img src={part} alt="Post content" className="max-h-[600px] rounded-2xl border border-rojo-900/10 shadow-lg object-contain bg-black/5" />
               </div>
             );
           }
           
-          // Video detection (MP4/WebM)
-          if (lowerPart.match(/\.(mp4|webm|ogg)/)) {
+          // Video detection (including data URLs)
+          if (lowerPart.match(/\.(mp4|webm|ogg)/) || lowerPart.startsWith('data:video/')) {
             return (
               <div key={i} className="my-4 max-w-full">
-                <video controls className="max-h-[500px] w-full rounded-2xl border border-rojo-900/10 shadow-lg bg-black/5">
-                  <source src={part} type={`video/${lowerPart.split('.').pop()}`} />
+                <video controls className="max-h-[600px] w-full rounded-2xl border border-rojo-900/10 shadow-lg bg-black/5">
+                  <source src={part} />
                   Your browser does not support the video tag.
                 </video>
               </div>
@@ -72,10 +73,12 @@ const ThreadDetailPage: React.FC = () => {
     threads, posts, currentUser, theme, users,
     addPost, updatePost, deletePost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView
   } = useAppState();
+  
   const [replyText, setReplyText] = useState('');
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const thread = threads.find(t => t.id === id);
   const threadPosts = posts.filter(p => p.threadId === id);
@@ -101,6 +104,20 @@ const ThreadDetailPage: React.FC = () => {
     await updatePost(editingPostId, editText);
     setEditingPostId(null);
     setEditText('');
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setReplyText(prev => prev + (prev.endsWith('\n') || prev === '' ? '' : '\n') + result + '\n');
+    };
+    reader.readAsDataURL(file);
+    // Reset input
+    e.target.value = '';
   };
 
   const isThreadLiked = thread.likedBy?.includes(currentUser?.id || '');
@@ -226,12 +243,20 @@ const ThreadDetailPage: React.FC = () => {
 
         {currentUser && !thread.isLocked ? (
           <div className={`border rounded-3xl p-10 shadow-2xl transition-all ${isDark ? 'bg-black border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
-            <h3 className="text-sm font-black uppercase text-slate-500 mb-6 flex items-center gap-2">Post a Reply</h3>
+            <div className="flex items-center justify-between mb-6">
+               <h3 className="text-sm font-black uppercase text-slate-500 flex items-center gap-2">Post a Reply</h3>
+               <div className="flex items-center gap-2">
+                  <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,video/*" />
+                  <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg bg-rojo-950/20 text-rojo-500 hover:bg-rojo-500 hover:text-white transition-all">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  </button>
+               </div>
+            </div>
             <textarea 
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               className={`w-full h-32 rounded-2xl p-5 text-sm outline-none focus:ring-2 ring-rojo-500 mb-6 border transition-all ${isDark ? 'bg-rojo-950 border-rojo-900/50 text-white placeholder-slate-800' : 'bg-rojo-50 border-rojo-100'}`}
-              placeholder="Post a link to an image, GIF, or YouTube video to embed it..."
+              placeholder="Paste media links or upload files directly..."
             />
             <div className="flex justify-end">
               <button 

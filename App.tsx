@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppStateProvider, useAppState } from './AppStateContext';
 import { supabase } from './services/supabaseClient';
@@ -38,12 +38,6 @@ const ProtectedRoutes: React.FC = () => {
         <div className="w-48 h-1 bg-rojo-900/30 rounded-full overflow-hidden">
           <div className="w-1/2 h-full bg-rojo-500 animate-[loading_2s_infinite]"></div>
         </div>
-        <style>{`
-          @keyframes loading {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-          }
-        `}</style>
       </div>
     );
   }
