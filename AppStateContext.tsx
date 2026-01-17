@@ -72,22 +72,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   };
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string, email?: string) => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error || !data) return null;
-      const user = mapUser(data);
-      setCurrentUser(user);
-      return user;
+      if (error || !data) {
+        // If profile fetch fails but we have a session, don't return null. 
+        // Return a minimal valid user object to prevent UI hangs.
+        return mapUser({ id: uid, email: email, username: email?.split('@')[0] });
+      }
+      return mapUser(data);
     } catch (e) {
-      console.error("[Auth] Profile fetch failure:", e);
-      return null;
+      return mapUser({ id: uid, email: email });
     }
   };
 
   const syncDatabase = async () => {
     try {
-      // Background sync - doesn't block the UI entry
       const [threadsRes, postsRes, usersRes, reportsRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name)'),
@@ -133,73 +133,52 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.warn("[Sync] Background data delay:", err);
+      console.warn("Sync delay:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    
-    // Safety Master Switch: 4 seconds max for any loading screen
-    const safetyTimer = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn("[Init] Safety timeout triggered: Unblocking UI.");
-        setLoading(false);
-      }
-    }, 4000);
 
-    const checkSessionAndInit = async () => {
+    const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
-        if (mounted) {
-          if (session?.user) {
-            setIsAuthenticated(true);
-            const profile = await fetchProfile(session.user.id);
-            if (!profile) {
-              // Only sign out if we DEFINITIVELY know the profile is missing after checking
-              const { data: retry } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
-              if (!retry) {
-                await supabase.auth.signOut();
-                setIsAuthenticated(false);
-              }
-            }
-            syncDatabase(); // Trigger non-blocking sync
-          } else {
-            setIsAuthenticated(false);
-          }
+        if (session?.user && mounted) {
+          const profile = await fetchProfile(session.user.id, session.user.email);
+          setCurrentUser(profile);
+          setIsAuthenticated(true);
+          syncDatabase();
+        } else if (mounted) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
         }
       } catch (err) {
-        console.error("[Init] Session error:", err);
+        console.error("Auth init error:", err);
       } finally {
-        if (mounted) {
-          setLoading(false);
-          clearTimeout(safetyTimer);
-        }
+        if (mounted) setLoading(false);
       }
     };
 
-    checkSessionAndInit();
+    initAuth();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      
-      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
-        setIsAuthenticated(true);
-        await fetchProfile(session.user.id);
-        setLoading(false);
-        syncDatabase();
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (session?.user) {
+          const profile = await fetchProfile(session.user.id, session.user.email);
+          setCurrentUser(profile);
+          setIsAuthenticated(true);
+          syncDatabase();
+        }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthenticated(false);
-        setLoading(false);
       }
     });
 
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
-      clearTimeout(safetyTimer);
     };
   }, []);
 
@@ -211,8 +190,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       throw error;
     }
     if (data.session) {
+      const profile = await fetchProfile(data.user.id, data.user.email);
+      setCurrentUser(profile);
       setIsAuthenticated(true);
-      await fetchProfile(data.user.id);
       syncDatabase();
     }
     setLoading(false);
@@ -280,7 +260,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
     if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
     const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
-    if (!error) await fetchProfile(currentUser.id);
+    if (!error) {
+       const updated = await fetchProfile(currentUser.id, currentUser.email);
+       setCurrentUser(updated);
+    }
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
