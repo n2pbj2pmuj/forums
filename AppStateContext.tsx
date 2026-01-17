@@ -76,8 +76,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (error || !data) {
-        // If profile fetch fails but we have a session, don't return null. 
-        // Return a minimal valid user object to prevent UI hangs.
         return mapUser({ id: uid, email: email, username: email?.split('@')[0] });
       }
       return mapUser(data);
@@ -133,20 +131,25 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.warn("Sync delay:", err);
+      console.warn("Background sync delay:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
+    // FAILSAFE: Always unblock the UI after 1.5 seconds
+    const safetyTimer = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 1500);
+
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && mounted) {
+          setIsAuthenticated(true);
           const profile = await fetchProfile(session.user.id, session.user.email);
           setCurrentUser(profile);
-          setIsAuthenticated(true);
           syncDatabase();
         } else if (mounted) {
           setIsAuthenticated(false);
@@ -156,6 +159,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error("Auth init error:", err);
       } finally {
         if (mounted) setLoading(false);
+        clearTimeout(safetyTimer);
       }
     };
 
@@ -165,9 +169,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!mounted) return;
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session?.user) {
+          setIsAuthenticated(true);
           const profile = await fetchProfile(session.user.id, session.user.email);
           setCurrentUser(profile);
-          setIsAuthenticated(true);
           syncDatabase();
         }
       } else if (event === 'SIGNED_OUT') {
@@ -179,6 +183,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
+      clearTimeout(safetyTimer);
     };
   }, []);
 
