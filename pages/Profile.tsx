@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
 import Layout from '../components/Layout';
 
 const ProfilePage: React.FC = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { currentUser, users, threads, theme, updateUser } = useAppState();
   const isDark = theme === 'dark';
 
@@ -29,6 +30,10 @@ const ProfilePage: React.FC = () => {
       if (type === 'pfp') updateUser({ avatarUrl: url });
       else updateUser({ bannerUrl: url });
     }
+  };
+
+  const handleMessageClick = () => {
+    navigate(`/messages?user=${user.id}`);
   };
 
   return (
@@ -65,7 +70,7 @@ const ProfilePage: React.FC = () => {
               {isOwnProfile ? (
                 <Link to="/settings" className="bg-slate-800 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-700">Settings</Link>
               ) : (
-                <button className="bg-rojo-600 text-white px-8 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-rojo-500">Message</button>
+                <button onClick={handleMessageClick} className="bg-rojo-600 text-white px-8 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-rojo-500">Message</button>
               )}
             </div>
           </div>

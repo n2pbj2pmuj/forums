@@ -46,6 +46,7 @@ interface AppState {
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string) => Promise<void>;
   sendChatMessage: (receiverId: string, content: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
+  fetchAllMessages: () => Promise<void>;
 }
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
@@ -61,6 +62,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
 
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
@@ -84,7 +86,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       avatarUrl: data.avatar_url || metadata.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
       bannerUrl: data.banner_url || metadata.banner_url,
       role: isSpecial ? 'Admin' : (data.role || 'User'),
-      status: data.status || 'Active',
+      status: (data.status as any) || 'Active',
       joinDate: data.created_at || new Date().toISOString(),
       postCount: data.post_count || 0,
       about: data.about || '',
@@ -97,7 +99,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const syncDatabase = async () => {
     try {
       const results = await Promise.allSettled([
-        supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
+        supabase.from('threads').select('*, profiles(username, display_name)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name)').order('created_at', { ascending: true })
@@ -132,6 +134,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const fetchAllMessages = async () => {
+    if (!currentUser) return;
+    const { data, error } = await supabase.from('messages')
+      .select('*')
+      .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setAllMessages(data as ChatMessage[]);
+    }
+  };
+
   const loadProfile = async (id: string) => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
@@ -161,6 +175,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setCurrentUser(mapUser(session.user));
           loadProfile(session.user.id);
           syncDatabase();
+          fetchAllMessages();
         }
       } catch (err) {
         console.error("Init Error:", err);
@@ -178,6 +193,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           loadProfile(session.user.id);
           syncDatabase();
+          fetchAllMessages();
         }
         setLoading(false);
       } else {
@@ -198,6 +214,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setCurrentUser(mapUser(data.user));
         loadProfile(data.user.id);
         syncDatabase();
+        fetchAllMessages();
       }
     } finally {
       setLoading(false);
@@ -280,12 +297,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const incrementThreadView = async (threadId: string) => {
     try {
-      // Using direct update as RPC 'increment_thread_view' might not exist yet
+      await supabase.rpc('increment_thread_view', { t_id: threadId });
+    } catch (e) {
+      // Fallback if RPC doesn't exist
       const t = threads.find(x => x.id === threadId);
       if (t) {
         await supabase.from('threads').update({ view_count: (t.viewCount || 0) + 1 }).eq('id', threadId);
       }
-    } catch (e) {}
+    }
   };
 
   const toggleThreadPin = async (id: string) => {
@@ -308,10 +327,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addPost = async (threadId: string, content: string) => {
     if (!currentUser) return;
     await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    const t = threads.find(x => x.id === threadId);
-    if (t) {
-      await supabase.from('threads').update({ reply_count: (t.replyCount || 0) + 1 }).eq('id', threadId);
-    }
     await syncDatabase();
   };
 
@@ -350,6 +365,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data, error } = await supabase.from('messages').insert(newMessage).select().single();
     if (!error && data) {
       setChatMessages(prev => [...prev, data as ChatMessage]);
+      fetchAllMessages();
     }
   };
 
@@ -371,7 +387,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       updatePassword: async (p) => { await supabase.auth.updateUser({ password: p }); },
       logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory
+      resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchAllMessages
     }}>
       {children}
     </AppStateContext.Provider>
