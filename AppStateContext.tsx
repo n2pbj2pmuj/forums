@@ -49,7 +49,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
 
-  const initialized = useRef(false);
+  const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
 
   useEffect(() => {
@@ -57,7 +57,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     document.documentElement.classList.toggle('light', theme === 'light');
   }, [theme]);
 
-  // Map raw Auth or Profile data to our User interface
   const mapUser = (data: any): User => {
     const email = data.email || '';
     const metadata = data.user_metadata || {};
@@ -83,11 +82,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const syncDatabase = async () => {
     try {
-      const [threadsRes, usersRes, reportsRes] = (await Promise.allSettled([
+      const results = await Promise.allSettled([
         supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('reports').select('*').order('created_at', { ascending: false })
-      ])) as any[];
+      ]);
+
+      const [threadsRes, usersRes, reportsRes] = results as any[];
 
       if (threadsRes.status === 'fulfilled' && threadsRes.value.data) {
         setThreads(threadsRes.value.data.map((x: any) => ({
@@ -106,19 +107,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         })));
       }
     } catch (e) {
-      console.warn("Background data sync incomplete.");
+      console.warn("Background sync incomplete.");
     }
   };
 
-  const loadProfile = async (authId: string) => {
+  const loadExtendedProfile = async (id: string) => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', authId).single();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
       if (!error && data) {
         setCurrentUser(mapUser(data));
       }
-    } catch (e) {
-      console.warn("Could not fetch extended profile details.");
-    }
+    } catch (e) {}
   };
 
   const logout = async () => {
@@ -129,49 +128,49 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    
-    // GUARANTEED UNLOCK: The app must show a screen after 3 seconds max, no matter what.
-    const unlockTimer = setTimeout(() => setLoading(false), 3000);
+    if (initRef.current) return;
+    initRef.current = true;
 
-    const checkInitialSession = async () => {
+    // The logic below follows Supabase documentation for immediate session retrieval
+    const initialize = async () => {
       try {
-        // Use getUser() as recommended for session validation on boot
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setCurrentUser(mapUser(user));
-          loadProfile(user.id);
+        // Step 1: Check session immediately (reads from local storage/cookies)
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Immediately set the user from session metadata to unlock UI
+          const mapped = mapUser(session.user);
+          setCurrentUser(mapped);
+          // Kick off background tasks
+          loadExtendedProfile(session.user.id);
           syncDatabase();
         }
-      } catch (e) {
-        console.error("Auth init error:", e);
+      } catch (err) {
+        console.error("Auth initialization failed:", err);
       } finally {
+        // ALWAYS unlock the UI here
         setLoading(false);
-        clearTimeout(unlockTimer);
       }
     };
 
-    checkInitialSession();
+    initialize();
 
-    // Setup listener for subsequent auth events
+    // Listener for all auth state changes (login, logout, refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-        if (session?.user) {
-          setCurrentUser(mapUser(session.user));
-          loadProfile(session.user.id);
-          setLoading(false);
+      if (session?.user) {
+        setCurrentUser(mapUser(session.user));
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          loadExtendedProfile(session.user.id);
+          syncDatabase();
         }
-      } else if (event === 'SIGNED_OUT') {
+        setLoading(false);
+      } else {
         setCurrentUser(null);
         setLoading(false);
       }
     });
 
-    return () => {
-      authListener.subscription.unsubscribe();
-      clearTimeout(unlockTimer);
-    };
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, pass: string) => {
@@ -181,7 +180,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) throw error;
       if (data.user) {
         setCurrentUser(mapUser(data.user));
-        loadProfile(data.user.id);
+        loadExtendedProfile(data.user.id);
         syncDatabase();
       }
     } finally {
@@ -235,7 +234,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: refreshed } = await supabase.auth.getUser();
     if (refreshed.user) {
       setCurrentUser(mapUser(refreshed.user));
-      loadProfile(refreshed.user.id);
     }
   };
 

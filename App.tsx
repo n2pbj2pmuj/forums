@@ -28,33 +28,16 @@ const GlobalAuthHandler: React.FC = () => {
 };
 
 const ProtectedRoutes: React.FC = () => {
-  const { currentUser, isAuthenticated, loading, logout } = useAppState();
+  const { currentUser, isAuthenticated, loading } = useAppState();
   const location = useLocation();
-  const [showSkip, setShowSkip] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowSkip(true), 3000);
-    return () => clearTimeout(timer);
-  }, [loading]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <div className="text-rojo-500 font-black text-2xl animate-pulse uppercase tracking-[0.2em] mb-4">Syncing Forums...</div>
-        <div className="w-48 h-1 bg-rojo-900/30 rounded-full overflow-hidden mb-8">
+        <div className="w-48 h-1 bg-rojo-900/30 rounded-full overflow-hidden">
           <div className="w-1/2 h-full bg-rojo-500 animate-[loading_2s_infinite]"></div>
         </div>
-        {showSkip && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <p className="text-slate-500 text-[10px] uppercase font-bold mb-4">Taking longer than expected?</p>
-            <button 
-              onClick={() => logout()} // Force state reset by calling logout
-              className="px-6 py-2 border border-rojo-900/50 text-rojo-500 rounded-lg text-[10px] font-bold uppercase hover:bg-rojo-900/10 transition-all"
-            >
-              Reset Session & Enter
-            </button>
-          </div>
-        )}
         <style>{`
           @keyframes loading {
             0% { transform: translateX(-100%); }
@@ -65,9 +48,15 @@ const ProtectedRoutes: React.FC = () => {
     );
   }
 
-  const isExempt = location.pathname === '/signup' || location.pathname === '/forgot-password' || location.pathname === '/login';
-  if (!isAuthenticated && !isExempt) return <Navigate to="/login" />;
-  if (currentUser?.status === 'Banned' && location.pathname !== '/banned') return <Navigate to="/banned" />;
+  const isExempt = ['/login', '/signup', '/forgot-password', '/update-password'].includes(location.pathname);
+  
+  if (!isAuthenticated && !isExempt) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (currentUser?.status === 'Banned' && location.pathname !== '/banned') {
+    return <Navigate to="/banned" replace />;
+  }
 
   return (
     <Routes>
@@ -81,7 +70,7 @@ const ProtectedRoutes: React.FC = () => {
       <Route path="/members" element={<MembersPage />} />
       <Route path="/banned" element={<BannedPage />} />
       <Route path="/update-password" element={<UpdatePasswordPage />} />
-      <Route path="*" element={<Navigate to="/" />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
