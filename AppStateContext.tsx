@@ -59,14 +59,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const mapUser = (data: any): User => ({
     id: data.id,
-    username: data.username,
-    displayName: data.display_name,
-    email: data.email,
-    avatarUrl: data.avatar_url,
+    username: data.username || 'unknown',
+    displayName: data.display_name || data.username || 'Unknown User',
+    email: data.email || '',
+    avatarUrl: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
     bannerUrl: data.banner_url,
-    role: data.role,
-    status: data.status,
-    joinDate: data.created_at,
+    role: data.role || 'User',
+    status: data.status || 'Active',
+    joinDate: data.created_at || new Date().toISOString(),
     postCount: data.post_count || 0,
     about: data.about,
     themePreference: data.theme_preference || 'dark',
@@ -74,12 +74,87 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     banExpires: data.ban_expires,
   });
 
+  const fetchProfile = async (uid: string) => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
+      if (error) {
+        console.warn("Profile fetch error (likely no record yet):", error.message);
+        // Fallback user if profile table trigger hasn't finished
+        setCurrentUser(mapUser({ id: uid }));
+      } else if (data) {
+        setCurrentUser(mapUser(data));
+      }
+    } catch (err) {
+      console.error("Critical profile fetch failure:", err);
+    }
+  };
+
+  const syncDatabase = async () => {
+    try {
+      const [threadsRes, postsRes, usersRes, assetsRes, reportsRes] = await Promise.all([
+        supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
+        supabase.from('posts').select('*, profiles(username, display_name)'),
+        supabase.from('profiles').select('*'),
+        supabase.from('assets').select('*'),
+        supabase.from('reports').select('*').order('created_at', { ascending: false })
+      ]);
+
+      if (threadsRes.data) setThreads(threadsRes.data.map(x => ({
+        id: x.id,
+        categoryId: x.category_id,
+        authorId: x.author_id,
+        authorName: x.profiles?.username || 'Unknown',
+        title: x.title,
+        content: x.content,
+        createdAt: x.created_at,
+        replyCount: x.reply_count || 0,
+        viewCount: x.view_count || 0,
+        isLocked: x.is_locked || false,
+        isPinned: x.is_pinned || false
+      })));
+      
+      if (postsRes.data) setPosts(postsRes.data.map(x => ({
+        id: x.id,
+        threadId: x.thread_id,
+        authorId: x.author_id,
+        authorName: x.profiles?.username || 'Unknown',
+        content: x.content,
+        createdAt: x.created_at,
+        likes: x.likes || 0,
+        likedBy: x.liked_by || []
+      })));
+
+      if (usersRes.data) setUsers(usersRes.data.map(x => mapUser(x)));
+      
+      if (assetsRes.data) setAssets(assetsRes.data.map(x => ({
+        id: x.id,
+        name: x.name,
+        imageUrl: x.image_url,
+        type: x.type,
+        isActive: x.is_active || false
+      })));
+
+      if (reportsRes.data) setReports(reportsRes.data.map(x => ({
+        id: x.id,
+        type: x.type as ReportType,
+        targetId: x.target_id,
+        reportedBy: x.reported_by,
+        reason: x.reason,
+        contentSnippet: x.content_snippet,
+        status: x.status as ModStatus,
+        createdAt: x.created_at
+      })));
+    } catch (err) {
+      console.error("Database sync failed:", err);
+    }
+  };
+
   useEffect(() => {
     const initSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        await fetchProfile(session.user.id);
         setIsAuthenticated(true);
+        await fetchProfile(session.user.id);
       }
       await syncDatabase();
       setLoading(false);
@@ -90,80 +165,19 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session) {
-          await fetchProfile(session.user.id);
           setIsAuthenticated(true);
+          await fetchProfile(session.user.id);
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthenticated(false);
       } else if (event === 'PASSWORD_RECOVERY') {
-        // App.tsx handles the actual navigation to /update-password
-        // but we set authenticated to true so the route is accessible
         setIsAuthenticated(true);
       }
     });
 
     return () => authListener.subscription.unsubscribe();
   }, []);
-
-  const fetchProfile = async (uid: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-    if (data) setCurrentUser(mapUser(data));
-  };
-
-  const syncDatabase = async () => {
-    const { data: t } = await supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false });
-    const { data: p } = await supabase.from('posts').select('*, profiles(username, display_name)');
-    const { data: u } = await supabase.from('profiles').select('*');
-    const { data: a } = await supabase.from('assets').select('*');
-    const { data: r } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
-
-    if (t) setThreads(t.map(x => ({
-      id: x.id,
-      categoryId: x.category_id,
-      authorId: x.author_id,
-      authorName: x.profiles?.username || 'Unknown',
-      title: x.title,
-      content: x.content,
-      createdAt: x.created_at,
-      replyCount: x.reply_count || 0,
-      viewCount: x.view_count || 0,
-      isLocked: x.is_locked || false,
-      isPinned: x.is_pinned || false
-    })));
-    
-    if (p) setPosts(p.map(x => ({
-      id: x.id,
-      threadId: x.thread_id,
-      authorId: x.author_id,
-      authorName: x.profiles?.username || 'Unknown',
-      content: x.content,
-      createdAt: x.created_at,
-      likes: x.likes || 0,
-      likedBy: x.liked_by || []
-    })));
-
-    if (u) setUsers(u.map(x => mapUser(x)));
-    
-    if (a) setAssets(a.map(x => ({
-      id: x.id,
-      name: x.name,
-      imageUrl: x.image_url,
-      type: x.type,
-      isActive: x.is_active || false
-    })));
-
-    if (r) setReports(r.map(x => ({
-      id: x.id,
-      type: x.type as ReportType,
-      targetId: x.target_id,
-      reportedBy: x.reported_by,
-      reason: x.reason,
-      contentSnippet: x.content_snippet,
-      status: x.status as ModStatus,
-      createdAt: x.created_at
-    })));
-  };
 
   const login = async (email: string, pass: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });

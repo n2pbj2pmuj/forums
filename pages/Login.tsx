@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
 
@@ -7,24 +8,35 @@ const LoginPage: React.FC = () => {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAppState();
+  const { login, isAuthenticated } = useAppState();
   const navigate = useNavigate();
+
+  // Redirect automatically if authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    
     setError('');
     setLoading(true);
+    
     try {
       await login(email, pass);
-      navigate('/');
+      // The useEffect above will handle redirection once the context updates
     } catch (err: any) {
+      setLoading(false); // Stop loading ONLY if there is an error
       if (err.message?.toLowerCase().includes('email not confirmed')) {
         setError('Verification pending. Please check your inbox for the activation link.');
+      } else if (err.message?.toLowerCase().includes('invalid login credentials')) {
+        setError('Invalid email or passphrase. Please verify your credentials.');
       } else {
-        setError(err.message || 'Authentication failed.');
+        setError(err.message || 'Authentication failed. Please check your connection.');
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -47,12 +59,13 @@ const LoginPage: React.FC = () => {
               onChange={e => setEmail(e.target.value)}
               className="w-full bg-rojo-950 border border-rojo-900/30 rounded-2xl px-5 py-3 text-white focus:ring-2 ring-rojo-500 outline-none transition-all placeholder-slate-700"
               placeholder="name@provider.com"
+              disabled={loading}
             />
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-[10px] font-black uppercase text-slate-500 tracking-widest">Secret Passphrase</label>
-              {/* Fix: Removed invalid 'size' prop from Link component which was causing a TypeScript error. */}
+              {/* Fixed: Removed unsupported 'size' prop from Link component */}
               <Link to="/forgot-password" className="text-[10px] font-black text-rojo-500 uppercase hover:underline">Forgot Key?</Link>
             </div>
             <input 
@@ -62,10 +75,12 @@ const LoginPage: React.FC = () => {
               onChange={e => setPass(e.target.value)}
               className="w-full bg-rojo-950 border border-rojo-900/30 rounded-2xl px-5 py-3 text-white focus:ring-2 ring-rojo-500 outline-none transition-all placeholder-slate-700"
               placeholder="••••••••"
+              disabled={loading}
             />
           </div>
 
           <button 
+            type="submit"
             disabled={loading}
             className="w-full bg-rojo-600 hover:bg-rojo-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-rojo-900/20 transition-all uppercase text-sm tracking-widest disabled:opacity-50"
           >
