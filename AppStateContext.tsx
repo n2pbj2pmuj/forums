@@ -94,6 +94,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const syncDatabase = async () => {
     try {
+      // Fetch data but don't block the UI - return partial data as it arrives
       const [threadsRes, postsRes, usersRes, reportsRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name)').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name)'),
@@ -139,52 +140,48 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: x.created_at
       })));
     } catch (err) {
-      console.warn("[Sync] Background sync failed:", err);
+      console.warn("[Sync] Data sync error:", err);
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    
-    // SAFETY OVERRIDE: 3-second absolute maximum for the loading screen
-    const safety = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn("[Init] Safety timeout: Force clearing loading screen.");
-        setLoading(false);
-      }
-    }, 3000);
 
-    const initialize = async () => {
+    const startApp = async () => {
       try {
+        // 1. Check for session first
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session?.user && mounted) {
-          setIsAuthenticated(true);
-          // Only wait for the user profile, not the entire forum database
-          await fetchProfile(session.user.id, session.user.email);
+        if (mounted) {
+          if (session?.user) {
+            setIsAuthenticated(true);
+            // 2. Load profile but don't hang forever if it fails
+            await Promise.race([
+              fetchProfile(session.user.id, session.user.email),
+              new Promise(resolve => setTimeout(resolve, 3000))
+            ]);
+          } else {
+            setIsAuthenticated(false);
+          }
         }
       } catch (err) {
-        console.error("[Init] Error:", err);
+        console.error("[Auth] Initial check failed:", err);
       } finally {
         if (mounted) {
           setLoading(false);
-          clearTimeout(safety);
-          // Run data sync in the background so the user can see the UI immediately
+          // 3. Always trigger data sync in the background
           syncDatabase();
         }
       }
     };
 
-    initialize();
+    startApp();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
-        // PRIOR LOGIN FIX: Prevent router blink by keeping loading on during profile fetch
-        if (!currentUser) setLoading(true); 
-        
+        setIsAuthenticated(true);
         await fetchProfile(session.user.id, session.user.email);
         if (mounted) {
-          setIsAuthenticated(true);
           setLoading(false);
           syncDatabase();
         }
@@ -198,7 +195,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
-      clearTimeout(safety);
     };
   }, []);
 
@@ -206,8 +202,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     if (data.session) {
-      await fetchProfile(data.user.id, data.user.email);
       setIsAuthenticated(true);
+      await fetchProfile(data.user.id, data.user.email);
     }
   };
 
