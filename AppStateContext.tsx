@@ -40,6 +40,8 @@ interface AppState {
   toggleThreadLock: (threadId: string) => Promise<void>;
   deleteThread: (threadId: string) => Promise<void>;
   addPost: (threadId: string, content: string) => Promise<void>;
+  updatePost: (postId: string, content: string) => Promise<void>;
+  deletePost: (postId: string) => Promise<void>;
   likePost: (postId: string) => Promise<void>;
   likeThread: (threadId: string) => Promise<void>;
   resolveReport: (reportId: string, status: ModStatus) => Promise<void>;
@@ -78,12 +80,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const metadata = data.user_metadata || {};
     const username = data.username || metadata.username || 'Member';
     
+    // Force default PFP logic for placeholders or banned users
+    const rawAvatar = data.avatar_url || metadata.avatar_url;
+    const isDicebear = rawAvatar?.includes('dicebear.com');
+    const avatar = (isDicebear || !rawAvatar) ? DEFAULT_AVATAR : rawAvatar;
+
     return {
       id: data.id,
       username: username,
       displayName: data.display_name || metadata.display_name || username || email.split('@')[0] || 'User',
       email: email,
-      avatarUrl: data.avatar_url || metadata.avatar_url || DEFAULT_AVATAR,
+      avatarUrl: data.status === 'Banned' ? DEFAULT_AVATAR : avatar,
       bannerUrl: data.banner_url || metadata.banner_url,
       role: data.role || 'User',
       status: (data.status as any) || 'Active',
@@ -122,7 +129,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setReports(reportsRes.value.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
           authorUsername: x.author_username, targetUrl: x.target_url,
-          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
         })));
       }
       if (postsRes.status === 'fulfilled' && postsRes.value.data) {
@@ -281,6 +288,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
+  const updatePost = async (postId: string, content: string) => {
+    await supabase.from('posts').update({ content }).eq('id', postId);
+    await syncDatabase();
+  };
+
+  const deletePost = async (postId: string) => {
+    await supabase.from('posts').delete().eq('id', postId);
+    await syncDatabase();
+  };
+
   const likePost = async (postId: string) => {
     if (!currentUser) return;
     const p = posts.find(x => x.id === postId);
@@ -354,7 +371,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, likePost, likeThread,
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
       resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword
     }}>
       {children}

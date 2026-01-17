@@ -11,9 +11,11 @@ const ThreadDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
     threads, posts, currentUser, theme, users,
-    addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView
+    addPost, updatePost, deletePost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView
   } = useAppState();
   const [replyText, setReplyText] = useState('');
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const thread = threads.find(t => t.id === id);
@@ -33,6 +35,13 @@ const ThreadDetailPage: React.FC = () => {
     addPost(thread.id, replyText);
     setReplyText('');
     setIsSubmitting(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingPostId || !editText.trim()) return;
+    await updatePost(editingPostId, editText);
+    setEditingPostId(null);
+    setEditText('');
   };
 
   const isThreadLiked = thread.likedBy?.includes(currentUser?.id || '');
@@ -71,7 +80,9 @@ const ThreadDetailPage: React.FC = () => {
             </div>
             <div className="flex-1 p-10 flex flex-col">
               <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-black tracking-tight">{thread.title}</h1>
+                <h1 className="text-3xl font-black tracking-tight">
+                   {isThreadAuthorBanned ? censorText(thread.title) : thread.title}
+                </h1>
                 <span className="text-[10px] font-black uppercase text-slate-600">{new Date(thread.createdAt).toLocaleString()}</span>
               </div>
               <div className={`leading-relaxed mb-10 flex-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -96,6 +107,8 @@ const ThreadDetailPage: React.FC = () => {
             const isLiked = post.likedBy?.includes(currentUser?.id || '');
             const postAuthor = users.find(u => u.id === post.authorId);
             const isPostAuthorBanned = postAuthor?.status === 'Banned';
+            const isMyPost = post.authorId === currentUser?.id;
+            const canManage = isMyPost || isAdmin;
 
             return (
               <div key={post.id} id={post.id} className={`border rounded-[2rem] overflow-hidden shadow-lg flex transition-all ${isDark ? 'bg-black/40 border-rojo-900/20' : 'bg-white border-rojo-100'}`}>
@@ -109,12 +122,35 @@ const ThreadDetailPage: React.FC = () => {
                   </div>
                   <p className={`text-[9px] font-black truncate w-full text-slate-400 ${isPostAuthorBanned ? 'line-through decoration-slate-600 opacity-60' : ''}`}>@{post.authorName}</p>
                 </div>
-                <div className="flex-1 p-6">
-                  <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                    {isPostAuthorBanned ? censorText(post.content) : post.content}
-                  </p>
-                  <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold uppercase">
-                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                <div className="flex-1 p-6 flex flex-col">
+                  {editingPostId === post.id ? (
+                    <div className="space-y-4">
+                      <textarea 
+                        value={editText}
+                        onChange={e => setEditText(e.target.value)}
+                        className={`w-full p-4 rounded-xl border text-sm outline-none focus:ring-1 ring-rojo-500 ${isDark ? 'bg-rojo-950 border-rojo-900/50' : 'bg-slate-50 border-slate-200'}`}
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={handleUpdate} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase">Save</button>
+                        <button onClick={() => setEditingPostId(null)} className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg text-[10px] font-black uppercase">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={`text-sm leading-relaxed mb-4 flex-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      {isPostAuthorBanned ? censorText(post.content) : post.content}
+                    </p>
+                  )}
+                  
+                  <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold uppercase pt-2 border-t border-rojo-900/5">
+                     <div className="flex items-center gap-4">
+                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                        {canManage && !isPostAuthorBanned && !editingPostId && (
+                           <div className="flex items-center gap-3">
+                              <button onClick={() => { setEditingPostId(post.id); setEditText(post.content); }} className="hover:text-rojo-500">Edit</button>
+                              <button onClick={() => { if(window.confirm('Delete this post?')) deletePost(post.id); }} className="hover:text-rojo-500">Delete</button>
+                           </div>
+                        )}
+                     </div>
                      <div className="flex items-center space-x-6">
                         <button onClick={() => likePost(post.id)} className={`flex items-center gap-1 font-black transition-all hover:scale-110 ${isLiked ? 'text-rojo-500' : 'hover:text-rojo-400'}`}>
                           <svg className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>

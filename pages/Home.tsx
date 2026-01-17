@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useAppState } from '../AppStateContext';
+import { useAppState, censorText } from '../AppStateContext';
 import Layout from '../components/Layout';
 import { Link } from 'react-router-dom';
 import { DEFAULT_AVATAR } from '../constants';
@@ -64,17 +64,17 @@ const HomePage: React.FC = () => {
                       {isBanned ? (
                          <img src={DEFAULT_AVATAR} className="w-full h-full object-cover" alt="" />
                       ) : (
-                        thread.authorName.charAt(0)
+                        author?.avatarUrl ? <img src={author.avatarUrl} className="w-full h-full object-cover" alt="" /> : thread.authorName.charAt(0)
                       )}
                     </div>
                     <div className="min-w-0">
                       <Link to={`/thread/${thread.id}`} className={`text-lg font-bold tracking-tight block mb-1 truncate ${isDark ? 'text-slate-100 hover:text-rojo-500' : 'text-slate-900 hover:text-rojo-600'}`}>
                         {thread.isPinned && <span className="mr-2 text-rojo-500">📌</span>}
-                        {thread.title}
+                        {isBanned ? censorText(thread.title) : thread.title}
                         {thread.isLocked && <span className="ml-2 text-slate-500 text-xs">🔒</span>}
                       </Link>
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                        <span className={`text-rojo-500 ${isBanned ? 'line-through decoration-slate-400' : ''}`}>@{thread.authorName}</span>
+                        <span className={`text-rojo-500 ${isBanned ? 'line-through decoration-slate-400 opacity-60' : ''}`}>@{thread.authorName}</span>
                         <span>•</span>
                         <span>{new Date(thread.createdAt).toLocaleDateString()}</span>
                       </div>
