@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppState } from '../AppStateContext';
 import Layout from '../components/Layout';
@@ -12,8 +11,8 @@ const MembersPage: React.FC = () => {
   const isDark = theme === 'dark';
 
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.displayName.toLowerCase().includes(search.toLowerCase()) || 
-                         u.username.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = (u.displayName || '').toLowerCase().includes(search.toLowerCase()) || 
+                         (u.username || '').toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === 'All' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -65,7 +64,12 @@ const MembersPage: React.FC = () => {
                 
                 <div className="px-8 pb-8 flex flex-col items-center -mt-12 text-center">
                   <div className="relative mb-6">
-                    <img src={isBanned ? DEFAULT_AVATAR : user.avatarUrl} className={`w-24 h-24 rounded-[2rem] border-8 shadow-2xl transition-transform group-hover:scale-105 object-cover ${isDark ? 'border-[#080101]' : 'border-white'}`} alt="" />
+                    <img 
+                      src={user.avatarUrl || DEFAULT_AVATAR} 
+                      className={`w-24 h-24 rounded-[2rem] border-8 shadow-2xl transition-transform group-hover:scale-105 object-cover ${isDark ? 'border-[#080101]' : 'border-white'}`} 
+                      alt="" 
+                      onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                    />
                     {!isBanned && <div className="absolute bottom-1 right-1 w-5 h-5 bg-emerald-500 rounded-full border-4 border-[#080101]"></div>}
                   </div>
                   
@@ -83,11 +87,11 @@ const MembersPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 w-full pt-6 border-t border-rojo-900/5">
                     <div>
-                      <p className="text-lg font-black">{user.postCount}</p>
+                      <p className="text-lg font-black">{user.postCount || 0}</p>
                       <p className="text-[9px] uppercase font-black text-slate-500 tracking-widest">Posts</p>
                     </div>
                     <div className="border-l border-rojo-900/5">
-                      <p className="text-lg font-black">{new Date(user.joinDate).getFullYear()}</p>
+                      <p className="text-lg font-black">{new Date(user.joinDate || Date.now()).getFullYear()}</p>
                       <p className="text-[9px] uppercase font-black text-slate-500 tracking-widest">Joined</p>
                     </div>
                   </div>
