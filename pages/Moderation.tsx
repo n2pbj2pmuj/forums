@@ -24,8 +24,7 @@ const ModerationPanel: React.FC = () => {
       <div className="flex flex-col h-[calc(100vh-140px)] gap-4 animate-in fade-in duration-500 overflow-hidden">
         <header className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black tracking-tight uppercase">Admin Console</h1>
-            <p className="text-rojo-600 font-bold uppercase text-[9px] tracking-widest mt-1">Universal Management System v4.1</p>
+            <h1 className="text-2xl font-black tracking-tight uppercase">Admin Panel</h1>
           </div>
           <div className="flex bg-zinc-900/50 p-1 rounded-2xl border border-zinc-800 shrink-0">
             <NavTab active={activeTab === 'users'} onClick={() => setActiveTab('users')}>Users</NavTab>
@@ -66,7 +65,7 @@ const ModerationPanel: React.FC = () => {
 
               <div className="flex-1 overflow-y-auto no-scrollbar pr-2 min-w-0">
                 {selectedUser ? (
-                  <UserInspector user={selectedUser} />
+                  <UserInspector key={selectedUser.id} user={selectedUser} />
                 ) : (
                   <div className="h-full border-4 border-dashed border-zinc-900 rounded-[2rem] flex items-center justify-center opacity-20">
                     <p className="font-black uppercase tracking-[0.5em] text-[10px]">Awaiting Data Selection</p>
@@ -95,6 +94,8 @@ const ModerationPanel: React.FC = () => {
 
 const UserInspector: React.FC<{ user: User }> = ({ user }) => {
   const { banUser, warnUser, unbanUser, updateUserNotes, toggleProtectedStatus, updateTargetUser, loginAs, fetchUserIpHistory, threads, posts } = useAppState();
+  
+  // Local state reset on user change via key prop in parent
   const [banReason, setBanReason] = useState('');
   const [banDuration, setBanDuration] = useState('1');
   const [doIpBan, setDoIpBan] = useState(false);
@@ -103,6 +104,8 @@ const UserInspector: React.FC<{ user: User }> = ({ user }) => {
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [ipHistory, setIpHistory] = useState<{ip: string, created_at: string, user_agent: string}[]>([]);
   const [showIpModal, setShowIpModal] = useState(false);
+  const [expandedReason, setExpandedReason] = useState<string | null>(null);
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -232,7 +235,7 @@ const UserInspector: React.FC<{ user: User }> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AdminPanelBox title="Global Punishment Logs">
-           <div className="overflow-y-auto h-[140px] no-scrollbar">
+           <div className="overflow-y-auto h-[200px] no-scrollbar">
               <table className="w-full text-left">
                 <thead className="sticky top-0 bg-zinc-900 border-b border-zinc-800">
                   <tr className="text-[6px] uppercase font-black tracking-widest text-zinc-600">
@@ -247,7 +250,19 @@ const UserInspector: React.FC<{ user: User }> = ({ user }) => {
                     <tr key={p.id} className="hover:bg-zinc-900/20">
                       <td className="px-3 py-2"><span className={`px-1 py-0.5 rounded ${p.action === 'Ban' ? 'text-rojo-500 bg-rojo-500/10' : 'text-amber-500 bg-amber-500/10'}`}>{p.action}</span></td>
                       <td className="px-3 py-2 text-zinc-400">@{p.moderator}</td>
-                      <td className="px-3 py-2 text-zinc-500 truncate max-w-[80px]">{p.reason}</td>
+                      <td className="px-3 py-2 text-zinc-500 max-w-[120px]">
+                        <div className="flex items-center gap-1">
+                          <span className="truncate flex-1">{p.reason}</span>
+                          {p.reason.length > 15 && (
+                            <button 
+                              onClick={() => setExpandedReason(p.reason)}
+                              className="text-[6px] text-rojo-500 hover:underline uppercase shrink-0"
+                            >
+                              View
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-right text-zinc-600">{new Date(p.created_at).toLocaleDateString()}</td>
                     </tr>
                   ))}
@@ -259,8 +274,8 @@ const UserInspector: React.FC<{ user: User }> = ({ user }) => {
            </div>
         </AdminPanelBox>
 
-        <AdminPanelBox title="Structured Staff Notes">
-           <div className="flex flex-col h-[140px]">
+        <AdminPanelBox title="Staff Notes">
+           <div className="flex flex-col h-[200px]">
               <div className="flex-1 overflow-y-auto p-2 space-y-2 no-scrollbar border-b border-zinc-900/40">
                 {(user.mod_notes || []).map(note => (
                   <div key={note.id} className="p-2 rounded-lg bg-zinc-900/40 border border-zinc-800">
@@ -276,12 +291,30 @@ const UserInspector: React.FC<{ user: User }> = ({ user }) => {
                 )}
               </div>
               <div className="p-2 flex gap-1">
-                 <input value={noteContent} onChange={e => setNoteContent(e.target.value)} placeholder="Append confidential note..." className="flex-1 bg-black border border-zinc-800 rounded px-2 py-1 text-[8px] outline-none" />
+                 <input value={noteContent} onChange={e => setNoteContent(e.target.value)} placeholder="Add note..." className="flex-1 bg-black border border-zinc-800 rounded px-2 py-1 text-[8px] outline-none" />
                  <button onClick={handleNoteCommit} disabled={isSavingNotes} className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[7px] font-black uppercase hover:bg-zinc-700">Add</button>
               </div>
            </div>
         </AdminPanelBox>
       </div>
+
+      {/* Expanded Reason Modal */}
+      {expandedReason && (
+        <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-6 backdrop-blur-sm animate-in zoom-in duration-200">
+          <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-[1.5rem] overflow-hidden shadow-2xl">
+             <div className="bg-zinc-900 p-4 border-b border-zinc-800 flex justify-between items-center">
+                <h3 className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Punishment Reason Audit</h3>
+                <button onClick={() => setExpandedReason(null)} className="text-zinc-600 hover:text-white">Close</button>
+             </div>
+             <div className="p-8">
+                <p className="text-zinc-200 text-sm leading-relaxed italic font-medium">"{expandedReason}"</p>
+             </div>
+             <div className="p-4 bg-zinc-900/50 flex justify-end">
+                <button onClick={() => setExpandedReason(null)} className="bg-rojo-600 text-white px-6 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest">Acknowledge</button>
+             </div>
+          </div>
+        </div>
+      )}
 
       {showIpModal && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6 backdrop-blur-md">
