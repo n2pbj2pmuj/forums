@@ -1,13 +1,11 @@
 -- ========================================================
--- ROJOSGAMES FORUM - SECURITY & IP TRACKING SCHEMA
+-- ROJOSGAMES FORUM - INTEGRATED IP TRACKING & BANNING
 -- ========================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- 1. TABLES
+-- 1. BASE TABLES
 -- --------------------------------------------------------
-
--- Profiles Table (Core User Data)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -21,13 +19,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     theme_preference TEXT DEFAULT 'dark',
     ban_reason TEXT,
     ban_expires TEXT,
-    last_ip TEXT, -- Tracking column
+    last_ip TEXT, -- Convenient shorthand for last known IP
     email TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Blacklisted IPs
 CREATE TABLE IF NOT EXISTS public.ip_bans (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     ip_address TEXT UNIQUE NOT NULL,
@@ -36,7 +33,6 @@ CREATE TABLE IF NOT EXISTS public.ip_bans (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Detailed Access Logs
 CREATE TABLE IF NOT EXISTS public.user_ips (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -46,15 +42,6 @@ CREATE TABLE IF NOT EXISTS public.user_ips (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Ensure columns exist if tables were previously created
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='last_ip') THEN
-        ALTER TABLE public.profiles ADD COLUMN last_ip TEXT;
-    END IF;
-END $$;
-
--- Forum Content Tables
 CREATE TABLE IF NOT EXISTS public.threads (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
@@ -103,12 +90,17 @@ CREATE TABLE IF NOT EXISTS public.messages (
     content TEXT NOT NULL
 );
 
--- 2. SECURITY FUNCTIONS
+-- 2. FUNCTIONS & TRIGGERS
 -- --------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.is_staff(u_id UUID) RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = u_id AND (role = 'Admin' OR role = 'Moderator'));
 $$ LANGUAGE sql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.handle_updated_at() RETURNS TRIGGER AS $$
+BEGIN 
+  NEW.updated_at = NOW(); 
+  RETURN NEW; 
+END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $$
 BEGIN
@@ -118,17 +110,19 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'username', 'Member_' || substr(NEW.id::text, 1, 5)),
     COALESCE(NEW.raw_user_meta_data->>'username', 'Member_' || substr(NEW.id::text, 1, 5)),
     NEW.email,
-    'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png?ex=696d6049&is=696c0ec9&hm=baf622e1557472b08edf9a0ea5afdb7c6bde3d5c855131823ac59478388b1e12&'
+    'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png'
   ) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
   RETURN NEW;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_profile_updated ON public.profiles;
+CREATE TRIGGER on_profile_updated BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
+
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 3. RLS POLICIES
+-- 3. POLICIES
 -- --------------------------------------------------------
-
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
@@ -137,7 +131,6 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ip_bans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_ips ENABLE ROW LEVEL SECURITY;
 
--- Clean start for policies
 DO $$
 DECLARE pol RECORD;
 BEGIN
@@ -145,30 +138,25 @@ BEGIN
     LOOP EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename); END LOOP;
 END $$;
 
--- Profiles
 CREATE POLICY "Profiles select" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id OR is_staff(auth.uid()));
 
--- IP Bans (Public read so the app can check before login)
 CREATE POLICY "Ip bans select" ON public.ip_bans FOR SELECT USING (true);
-CREATE POLICY "Ip bans staff_modify" ON public.ip_bans FOR ALL USING (is_staff(auth.uid()));
+CREATE POLICY "Ip bans modify" ON public.ip_bans FOR ALL USING (is_staff(auth.uid()));
 
--- Visit Logs
 CREATE POLICY "User_ips insert" ON public.user_ips FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "User_ips staff_view" ON public.user_ips FOR SELECT USING (is_staff(auth.uid()) OR auth.uid() = user_id);
+CREATE POLICY "User_ips view" ON public.user_ips FOR SELECT USING (auth.uid() = user_id OR is_staff(auth.uid()));
 
--- Threads
 CREATE POLICY "Threads select" ON public.threads FOR SELECT USING (true);
+CREATE POLICY "Threads mod" ON public.threads FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Threads insert" ON public.threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Threads update_delete" ON public.threads FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
 
--- Posts
 CREATE POLICY "Posts select" ON public.posts FOR SELECT USING (true);
+CREATE POLICY "Posts mod" ON public.posts FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Posts insert" ON public.posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Posts update_delete" ON public.posts FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
 
--- Reports & Messages
 CREATE POLICY "Reports insert" ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Reports select" ON public.reports FOR SELECT USING (is_staff(auth.uid()));
+
 CREATE POLICY "Messages access" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 CREATE POLICY "Messages insert" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);

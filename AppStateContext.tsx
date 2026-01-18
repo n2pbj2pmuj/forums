@@ -193,6 +193,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const logout = async () => { await supabase.auth.signOut(); setCurrentUser(null); setOriginalAdmin(null); };
 
+  const checkIpBan = async (ip: string | null) => {
+    if (!ip) return false;
+    const { data } = await supabase.from('ip_bans').select('id').eq('ip_address', ip).maybeSingle();
+    return !!data;
+  };
+
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
@@ -206,9 +212,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } catch (e) { console.warn("IP Detection Failed", e); }
 
       if (detectedIp) {
-        const { data: bannedIps } = await supabase.from('ip_bans').select('ip_address');
-        const isBlocked = bannedIps?.some(b => b.ip_address === detectedIp);
-        setIsIpBanned(!!isBlocked);
+        const isBlocked = await checkIpBan(detectedIp);
+        setIsIpBanned(isBlocked);
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -222,14 +227,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = async (email: string, pass: string) => {
-    if (isIpBanned) throw new Error("This IP address is blacklisted from RojoGames.");
+    const isBlocked = await checkIpBan(clientIp);
+    if (isBlocked) {
+      setIsIpBanned(true);
+      throw new Error("You are forbidden from signing up or logging into accounts.");
+    }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     if (data.user) { await loadProfile(data.user.id, clientIp); await syncDatabase(); }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    if (isIpBanned) throw new Error("This IP address is blacklisted from RojoGames.");
+    const isBlocked = await checkIpBan(clientIp);
+    if (isBlocked) {
+      setIsIpBanned(true);
+      throw new Error("You are forbidden from signing up or logging into accounts.");
+    }
     await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
   };
 
@@ -259,7 +272,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean, resetUsername?: boolean) => {
-    const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
+    const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toISOString();
     const updatePayload: any = { 
       status: 'Banned', 
       ban_reason: reason, 
@@ -294,11 +307,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const unbanIp = async (ip: string) => {
     await supabase.from('ip_bans').delete().eq('ip_address', ip);
+    setIsIpBanned(false);
     await syncDatabase();
   };
 
   const addManualIpBan = async (ip: string, reason: string) => {
     const { error } = await supabase.from('ip_bans').insert({ ip_address: ip, reason, banned_by: currentUser?.id });
+    if (ip === clientIp) setIsIpBanned(true);
     if (error) alert("Failed to add IP ban: " + error.message);
     await syncDatabase();
   };
