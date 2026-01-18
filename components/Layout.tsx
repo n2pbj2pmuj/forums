@@ -23,7 +23,7 @@ const NavLink: React.FC<NavLinkProps> = ({ to, children, active }) => {
       className={`text-xs font-bold uppercase tracking-widest transition-all relative py-1 ${
         active 
           ? (isDark ? 'text-rojo-500' : 'text-rojo-600') 
-          : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-900')
+          : (isDark ? 'text-slate-500 hover:text-slate-300' : (isDark ? 'text-slate-500 hover:text-slate-900' : 'text-slate-500 hover:text-slate-900'))
       }`}
     >
       {children}
@@ -31,6 +31,20 @@ const NavLink: React.FC<NavLinkProps> = ({ to, children, active }) => {
     </Link>
   );
 };
+
+const SplatterIcon = () => (
+  <svg className="w-8 h-8 text-rojo-600 drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]" viewBox="0 0 100 100" fill="currentColor">
+    <circle cx="50" cy="50" r="20" />
+    <circle cx="35" cy="40" r="12" />
+    <circle cx="65" cy="45" r="10" />
+    <circle cx="55" cy="65" r="14" />
+    <circle cx="40" cy="60" r="8" />
+    <circle cx="25" cy="50" r="6" />
+    <circle cx="75" cy="55" r="7" />
+    <circle cx="45" cy="25" r="5" />
+    <circle cx="60" cy="30" r="6" />
+  </svg>
+);
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
@@ -44,13 +58,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
-  // If we're not authenticated and not on an auth page, we shouldn't even be here (App.tsx handles this), 
-  // but we'll return null just in case of race conditions.
   if (!isAuthenticated && location.pathname !== '/login' && location.pathname !== '/signup') {
     return null;
   }
 
-  // If currentUser is null but we ARE authenticated, we show a basic skeleton/header instead of blocking.
   const user = currentUser || { 
     displayName: 'Loading...', 
     username: '...', 
@@ -74,8 +85,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <header className={`h-16 border-b sticky top-0 z-50 flex items-center justify-between px-6 backdrop-blur-md transition-all ${isDark ? 'bg-black/90 border-rojo-900/50 shadow-[0_0_20px_rgba(255,0,0,0.1)]' : 'bg-white/90 border-rojo-100'}`}>
         <div className="flex items-center space-x-12">
-          <Link to="/" className={`text-2xl font-black tracking-tight ${isDark ? 'text-rojo-500' : 'text-rojo-600'}`}>
-            ROJO<span className={isDark ? 'text-white' : 'text-slate-900'}>GAMES</span>
+          <Link to="/" className="flex items-center gap-2 group">
+            <SplatterIcon />
+            <span className={`text-2xl font-black tracking-tight ${isDark ? 'text-rojo-500' : 'text-rojo-600'}`}>
+              Rojos<span className={isDark ? 'text-white' : 'text-slate-900'}>Games</span>
+            </span>
           </Link>
           <nav className="hidden md:flex space-x-8">
             <NavLink to="/" active={location.pathname === '/'}>Forums</NavLink>

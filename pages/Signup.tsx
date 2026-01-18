@@ -3,6 +3,20 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
 
+const SplatterIcon = () => (
+  <svg className="w-10 h-10 text-rojo-600 mb-2 drop-shadow-[0_0_8px_rgba(255,0,0,0.6)]" viewBox="0 0 100 100" fill="currentColor">
+    <circle cx="50" cy="50" r="20" />
+    <circle cx="35" cy="40" r="12" />
+    <circle cx="65" cy="45" r="10" />
+    <circle cx="55" cy="65" r="14" />
+    <circle cx="40" cy="60" r="8" />
+    <circle cx="25" cy="50" r="6" />
+    <circle cx="75" cy="55" r="7" />
+    <circle cx="45" cy="25" r="5" />
+    <circle cx="60" cy="30" r="6" />
+  </svg>
+);
+
 const SignupPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -36,9 +50,10 @@ const SignupPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-[#0a0202] border border-rojo-900/50 rounded-2xl p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-rojo-500 tracking-tight mb-1">REGISTER</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Join the RojoGames Community</p>
+        <div className="flex flex-col items-center text-center mb-8">
+          <SplatterIcon />
+          <h1 className="text-3xl font-black text-rojo-500 tracking-tight mb-1 uppercase">Register</h1>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Join the RojosGames Community</p>
         </div>
 
         {success ? (

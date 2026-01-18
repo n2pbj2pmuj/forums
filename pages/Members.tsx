@@ -21,7 +21,7 @@ const MembersPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <h1 className={`text-4xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>MEMBER LIST</h1>
-            <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-1">Forum Community Database</p>
+            <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-1">Forum Members</p>
           </div>
           <div className="relative group">
             <input 

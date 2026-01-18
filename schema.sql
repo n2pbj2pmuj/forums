@@ -1,6 +1,7 @@
 
 -- ==========================================
 -- 1. ADDITIVE UPDATE (No Reset)
+-- This script refreshes logic but preserves data.
 -- ==========================================
 
 -- Trigger to increment stats when a post is created
@@ -23,12 +24,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger to cleanup when a thread is deleted (post_count adjustment for author)
+-- Trigger to cleanup when a thread is deleted
 CREATE OR REPLACE FUNCTION public.handle_thread_deletion()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Posts are deleted automatically via ON DELETE CASCADE in the schema.
-  -- The on_post_deleted trigger will fire for each, handling profile post counts.
+  -- Data tables are linked with ON DELETE CASCADE.
+  -- Stats for users are handled by the individual post_deletion triggers.
   RETURN OLD;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -42,7 +43,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ==========================================
--- 2. REBIND TRIGGERS (Safe execution)
+-- 2. REBIND TRIGGERS
 -- ==========================================
 
 DROP TRIGGER IF EXISTS on_post_created ON public.posts;
@@ -61,7 +62,7 @@ CREATE TRIGGER on_thread_deleted
   FOR EACH ROW EXECUTE PROCEDURE public.handle_thread_deletion();
 
 -- ==========================================
--- 3. UPDATED POLICIES (Add permissions)
+-- 3. POLICIES (Update permissions)
 -- ==========================================
 
 -- Ensure staff helper exists

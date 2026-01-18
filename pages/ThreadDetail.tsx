@@ -6,8 +6,10 @@ import Layout from '../components/Layout';
 import { ReportType } from '../types';
 import { DEFAULT_AVATAR } from '../constants';
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB Limit
+
 const MediaRenderer: React.FC<{ content: string; isBanned: boolean }> = ({ content, isBanned }) => {
-  if (isBanned) return <div className="font-mono break-all leading-relaxed">{censorText(content)}</div>;
+  if (isBanned) return <div className="font-mono break-all leading-relaxed opacity-60">{censorText(content)}</div>;
 
   // Split content by URLs or Data URIs to render them as blocks
   const mediaRegex = /(https?:\/\/[^\s]+|data:[^;]+;base64,[^\s]+)/g;
@@ -24,7 +26,13 @@ const MediaRenderer: React.FC<{ content: string; isBanned: boolean }> = ({ conte
           if (lowerPart.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp)/) || lowerPart.startsWith('data:image/')) {
             return (
               <div key={i} className="my-6 max-w-full">
-                <img src={part} alt="Post content" className="max-h-[700px] rounded-3xl border border-rojo-900/20 shadow-2xl object-contain bg-black/40" loading="lazy" />
+                <img 
+                  src={part} 
+                  alt="Post content" 
+                  className="max-h-[700px] rounded-3xl border border-rojo-900/20 shadow-2xl object-contain bg-black/40" 
+                  loading="lazy" 
+                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                />
               </div>
             );
           }
@@ -100,10 +108,15 @@ const ThreadDetailPage: React.FC = () => {
     // Combine text and media into the content field
     const finalContent = [replyText.trim(), ...pendingMedia].filter(Boolean).join('\n\n');
     
-    await addPost(thread.id, finalContent);
-    setReplyText('');
-    setPendingMedia([]);
-    setIsSubmitting(false);
+    try {
+      await addPost(thread.id, finalContent);
+      setReplyText('');
+      setPendingMedia([]);
+    } catch (err) {
+      alert("Failed to post reply. Content might be too large.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdate = async () => {
@@ -118,6 +131,11 @@ const ThreadDetailPage: React.FC = () => {
     if (!files) return;
 
     Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File "${file.name}" exceeds the 5MB limit and will be skipped.`);
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
@@ -306,7 +324,7 @@ const ThreadDetailPage: React.FC = () => {
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               className={`w-full h-40 rounded-[2rem] p-8 text-sm outline-none focus:ring-4 ring-rojo-500/20 mb-8 border transition-all ${isDark ? 'bg-rojo-950/20 border-rojo-900/40 text-white placeholder-slate-800' : 'bg-rojo-50/50 border-rojo-100'}`}
-              placeholder="Join the discussion... You can also paste links to YouTube videos or direct images."
+              placeholder="Join the discussion... Max 5MB per upload. You can also paste direct links."
             />
             <div className="flex justify-end">
               <button 

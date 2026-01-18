@@ -3,6 +3,20 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
 
+const SplatterIcon = () => (
+  <svg className="w-10 h-10 text-rojo-600 mb-2 drop-shadow-[0_0_8px_rgba(255,0,0,0.6)]" viewBox="0 0 100 100" fill="currentColor">
+    <circle cx="50" cy="50" r="20" />
+    <circle cx="35" cy="40" r="12" />
+    <circle cx="65" cy="45" r="10" />
+    <circle cx="55" cy="65" r="14" />
+    <circle cx="40" cy="60" r="8" />
+    <circle cx="25" cy="50" r="6" />
+    <circle cx="75" cy="55" r="7" />
+    <circle cx="45" cy="25" r="5" />
+    <circle cx="60" cy="30" r="6" />
+  </svg>
+);
+
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
@@ -43,8 +57,9 @@ const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-[#0a0202] border border-rojo-900/50 rounded-2xl p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-rojo-500 tracking-tight mb-1">ROJOGAMES</h1>
+        <div className="flex flex-col items-center text-center mb-8">
+          <SplatterIcon />
+          <h1 className="text-3xl font-black text-rojo-500 tracking-tight mb-1">RojosGames</h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Forum Member Login</p>
         </div>
 
@@ -65,8 +80,7 @@ const LoginPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-[10px] font-bold uppercase text-slate-500 tracking-widest">Password</label>
-              {/* Removed the invalid alt prop from Link */}
-              <Link to="/forgot-password" className="text-[10px] font-bold text-rojo-500 uppercase hover:underline">Forgot?</Link>
+              <Link to="/forgot-password" title="Recover Password" className="text-[10px] font-bold text-rojo-500 uppercase hover:underline">Forgot?</Link>
             </div>
             <input 
               required
