@@ -153,9 +153,46 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
         setAllChatPartners(Array.from(partners));
       }
-
     } catch (e) { console.warn("Sync error", e); }
   };
+
+  // REALTIME SUBSCRIPTION
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const channel = supabase
+      .channel('chat_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        const { eventType, new: newMsg, old: oldMsg } = payload;
+        
+        setChatMessages(prev => {
+          if (eventType === 'INSERT') {
+            // Only add if relevant to current conversation
+            // (Note: This might overlap with manual fetch but ensures immediate UI update)
+            const isRelevant = newMsg.sender_id === currentUser.id || newMsg.receiver_id === currentUser.id;
+            if (!isRelevant) return prev;
+            if (prev.find(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg as ChatMessage].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          }
+          if (eventType === 'UPDATE') {
+            return prev.map(m => m.id === newMsg.id ? { ...m, ...newMsg } : m);
+          }
+          if (eventType === 'DELETE') {
+            return prev.filter(m => m.id === oldMsg.id);
+          }
+          return prev;
+        });
+
+        // Update partners list if new message from new person
+        if (eventType === 'INSERT') {
+          const partnerId = newMsg.sender_id === currentUser.id ? newMsg.receiver_id : newMsg.sender_id;
+          setAllChatPartners(p => p.includes(partnerId) ? p : [...p, partnerId]);
+        }
+      })
+      .subscribe();
+
+    return () => { channel.unsubscribe(); };
+  }, [currentUser]);
 
   const loadProfile = async (id: string, detectedIp: string | null) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
@@ -337,6 +374,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const sendChatMessage = async (receiverId: string, content: string, attachments: string[] = []) => {
     if (!currentUser) return;
     await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: receiverId, content, attachments });
+    // Fetch handled by Realtime channel now, but a local fetch ensures consistency
     await fetchChatHistory(receiverId);
     await syncDatabase();
   };
@@ -345,14 +383,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const msg = chatMessages.find(m => m.id === messageId);
     if (!msg || msg.sender_id !== currentUser?.id) return;
     await supabase.from('messages').delete().eq('id', messageId);
-    await fetchChatHistory(msg.receiver_id === currentUser.id ? msg.sender_id : msg.receiver_id);
   };
 
   const editChatMessage = async (messageId: string, newContent: string) => {
     const msg = chatMessages.find(m => m.id === messageId);
     if (!msg || msg.sender_id !== currentUser?.id) return;
     await supabase.from('messages').update({ content: newContent, is_edited: true, updated_at: new Date().toISOString() }).eq('id', messageId);
-    await fetchChatHistory(msg.receiver_id === currentUser.id ? msg.sender_id : msg.receiver_id);
   };
 
   const reactToChatMessage = async (messageId: string, emoji: string) => {
@@ -367,7 +403,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reactions[emoji].push(currentUser.id);
     }
     await supabase.from('messages').update({ reactions }).eq('id', messageId);
-    await fetchChatHistory(msg.receiver_id === currentUser.id ? msg.sender_id : msg.receiver_id);
   };
 
   const resetPassword = async (email: string) => { await supabase.auth.resetPasswordForEmail(email); };
