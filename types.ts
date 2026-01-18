@@ -1,3 +1,4 @@
+
 export enum ModStatus {
   PENDING = 'PENDING',
   RESOLVED = 'RESOLVED',
@@ -11,6 +12,15 @@ export enum ReportType {
 }
 
 export type ThemeMode = 'light' | 'dark';
+
+export interface Punishment {
+  id: string;
+  action: 'Warn' | 'Ban' | 'Username Reset' | 'Unban';
+  moderator: string;
+  reason: string;
+  created_at: string;
+  expiration: string;
+}
 
 export interface User {
   id: string;
@@ -28,6 +38,9 @@ export interface User {
   banReason?: string;
   banExpires?: string;
   lastIp?: string;
+  isProtected?: boolean;
+  notes?: string;
+  punishments?: Punishment[];
 }
 
 export interface ForumCategory {

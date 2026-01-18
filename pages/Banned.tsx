@@ -50,7 +50,7 @@ const BannedPage: React.FC = () => {
             <p className="text-zinc-200 text-lg font-bold leading-relaxed">
               You are forbidden from signing up or logging into accounts.
             </p>
-            <p className="text-zinc-500 text-sm">Your network has been blacklisted for severe violations.</p>
+            <p className="text-zinc-500 text-sm">You are no longer welcome on the site.</p>
             <button onClick={handleSignOut} className="w-full bg-zinc-100 text-zinc-900 py-3 rounded-xl font-bold uppercase text-xs tracking-wider">Back to Login</button>
           </div>
         </div>
@@ -70,7 +70,7 @@ const BannedPage: React.FC = () => {
         <div className="p-10 space-y-8 text-center">
           <div className="space-y-4">
             <h2 className="text-rojo-500 font-black uppercase text-xs tracking-widest">
-              {isPermanent ? 'Permanent Suspension' : `Banned for ${timeLeft?.d || 0} days`}
+              {isPermanent ? 'Account Deleted' : `Banned for ${timeLeft?.d || 0} days`}
             </h2>
             <div className="p-5 rounded-2xl bg-black/40 border border-zinc-800 text-left">
               <p className="text-[10px] font-black uppercase text-zinc-600 mb-2 tracking-widest">Reason</p>

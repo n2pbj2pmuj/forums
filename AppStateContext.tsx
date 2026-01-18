@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment } from './types';
 import { supabase } from './services/supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
 
@@ -44,6 +45,9 @@ interface AppState {
   updateTargetUser: (userId: string, data: Partial<User>) => Promise<void>; 
   banUser: (userId: string, reason: string, duration: string, ipBan?: boolean, resetUsername?: boolean) => Promise<void>;
   unbanUser: (userId: string) => Promise<void>;
+  warnUser: (userId: string, reason: string) => Promise<void>;
+  updateUserNotes: (userId: string, notes: string) => Promise<void>;
+  toggleProtectedStatus: (userId: string) => Promise<void>;
   unbanIp: (ip: string) => Promise<void>;
   addManualIpBan: (ip: string, reason: string) => Promise<void>;
   addThread: (title: string, content: string, categoryId: string) => Promise<void>;
@@ -106,7 +110,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     themePreference: (data.theme_preference as ThemeMode) || 'dark',
     banReason: data.ban_reason || '',
     banExpires: data.ban_expires || '',
-    lastIp: data.last_ip || null
+    lastIp: data.last_ip || null,
+    isProtected: data.is_protected || false,
+    notes: data.notes || '',
+    punishments: data.punishments || []
   });
 
   const mapToDb = (data: Partial<User>): any => {
@@ -122,6 +129,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.banReason !== undefined) mapping.ban_reason = data.banReason;
     if (data.banExpires !== undefined) mapping.ban_expires = data.banExpires;
     if (data.lastIp !== undefined) mapping.last_ip = data.lastIp;
+    if (data.isProtected !== undefined) mapping.is_protected = data.isProtected;
+    if (data.notes !== undefined) mapping.notes = data.notes;
+    if (data.punishments !== undefined) mapping.punishments = data.punishments;
     return mapping;
   };
 
@@ -154,7 +164,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       })));
       if (reportsRes.data) setReports(reportsRes.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
-          authorUsername: x.author_username, targetUrl: x.target_url,
+          authorUsername: x.author_username, target_url: x.target_url,
           reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
       })));
       if (ipBansRes.data) setIpBans(ipBansRes.data);
@@ -271,6 +281,21 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
+  const logPunishment = async (userId: string, action: Punishment['action'], reason: string, expiration: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    const newPunishment: Punishment = {
+      id: Math.random().toString(36).substr(2, 9),
+      action,
+      moderator: currentUser?.username || 'Staff',
+      reason,
+      created_at: new Date().toISOString(),
+      expiration
+    };
+    const updatedPunishments = [newPunishment, ...(user.punishments || [])];
+    await supabase.from('profiles').update({ punishments: updatedPunishments }).eq('id', userId);
+  };
+
   const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean, resetUsername?: boolean) => {
     const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toISOString();
     const updatePayload: any = { 
@@ -284,8 +309,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const resetName = `Username-Reset${randomDigits}`;
       updatePayload.username = resetName;
       updatePayload.display_name = resetName;
+      await logPunishment(userId, 'Username Reset', `System Reset: ${reason}`, 'Never');
     }
 
+    await logPunishment(userId, 'Ban', reason, expires);
     const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId);
     
     if (doIpBan) {
@@ -300,8 +327,27 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const unbanUser = async (userId: string) => {
+    await logPunishment(userId, 'Unban', 'Administrative Pardon', 'N/A');
     const { error } = await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
     if (error) alert("Unban failed: " + error.message);
+    await syncDatabase();
+  };
+
+  const warnUser = async (userId: string, reason: string) => {
+    await logPunishment(userId, 'Warn', reason, 'N/A');
+    await supabase.from('profiles').update({ status: 'Warned' }).eq('id', userId);
+    await syncDatabase();
+  };
+
+  const updateUserNotes = async (userId: string, notes: string) => {
+    await supabase.from('profiles').update({ notes }).eq('id', userId);
+    await syncDatabase();
+  };
+
+  const toggleProtectedStatus = async (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    await supabase.from('profiles').update({ is_protected: !user.isProtected }).eq('id', userId);
     await syncDatabase();
   };
 
@@ -400,7 +446,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, warnUser, updateUserNotes, toggleProtectedStatus, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
       resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent
     }}>
       {children}
