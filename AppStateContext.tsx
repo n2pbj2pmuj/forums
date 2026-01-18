@@ -183,7 +183,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
+    const dbPayload = mapToDb(data);
+    const { error } = await supabase.from('profiles').update(dbPayload).eq('id', currentUser.id);
     if (error) {
       console.error("Update Error:", error.message);
       alert("Failed to update profile: " + error.message);
@@ -208,7 +209,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addPost = async (threadId: string, content: string) => {
     if (!currentUser) return;
     const { error } = await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    if (error) { console.error("Post Error:", error.message); alert("Failed to reply: " + error.message); }
+    if (error) { 
+      console.error("Post Error Details:", error); 
+      alert("Failed to reply: " + error.message); 
+    }
+    await syncDatabase();
+  };
+
+  const updatePost = async (postId: string, content: string) => {
+    const { error } = await supabase.from('posts').update({ content }).eq('id', postId);
+    if (error) alert("Failed to edit post: " + error.message);
     await syncDatabase();
   };
 
@@ -282,7 +292,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost: async() => {}, deletePost, likePost, likeThread,
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
       resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword
     }}>
       {children}

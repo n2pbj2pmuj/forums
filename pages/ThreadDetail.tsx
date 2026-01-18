@@ -34,13 +34,14 @@ const MediaRenderer: React.FC<{ content: string; isBanned: boolean }> = ({ conte
 const ThreadDetailPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { threads, posts, currentUser, theme, users, addPost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView, deletePost } = useAppState();
+  const { threads, posts, currentUser, theme, users, addPost, updatePost, addReport, toggleThreadPin, toggleThreadLock, deleteThread, likePost, likeThread, incrementThreadView, deletePost } = useAppState();
   
   const [replyText, setReplyText] = useState('');
   const [pendingMedia, setPendingMedia] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
   const [showReportModal, setShowReportModal] = useState<{type: ReportType, targetId: string, author: string} | null>(null);
-  const [reportContext, setReportContext] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const thread = threads.find(t => t.id === id);
@@ -65,6 +66,12 @@ const ThreadDetailPage: React.FC = () => {
     } finally { setIsSubmitting(false); }
   };
 
+  const handleEditSave = async (postId: string) => {
+    if (!editText.trim()) return;
+    await updatePost(postId, editText);
+    setEditingPostId(null);
+  };
+
   const isThreadLiked = thread.likedBy?.includes(currentUser?.id || '');
   const threadAuthor = users.find(u => u.id === thread.authorId);
   const isThreadAuthorBanned = threadAuthor?.status === 'Banned';
@@ -77,13 +84,19 @@ const ThreadDetailPage: React.FC = () => {
             <svg className="w-3.5 h-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
             Community Hub
           </Link>
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              <button onClick={() => toggleThreadPin(thread.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${thread.isPinned ? 'bg-rojo-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-500'}`}>{thread.isPinned ? 'UNPIN' : 'PIN'}</button>
-              <button onClick={() => toggleThreadLock(thread.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${thread.isLocked ? 'bg-rojo-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-500'}`}>{thread.isLocked ? 'UNLOCK' : 'LOCK'}</button>
-              <button onClick={() => { if(window.confirm('Erase Thread?')) { deleteThread(thread.id); navigate('/'); } }} className="px-4 py-2 bg-zinc-900 border border-rojo-950 text-rojo-600 rounded-xl text-[9px] font-black uppercase hover:bg-rojo-600 hover:text-white transition-all">ERASE</button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {(thread.authorId === currentUser?.id || isAdmin) && (
+              <>
+                 {isAdmin && (
+                   <>
+                     <button onClick={() => toggleThreadPin(thread.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${thread.isPinned ? 'bg-rojo-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-500'}`}>{thread.isPinned ? 'UNPIN' : 'PIN'}</button>
+                     <button onClick={() => toggleThreadLock(thread.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${thread.isLocked ? 'bg-rojo-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-500'}`}>{thread.isLocked ? 'UNLOCK' : 'LOCK'}</button>
+                   </>
+                 )}
+                 <button onClick={() => { if(window.confirm('Delete this entire thread?')) { deleteThread(thread.id); navigate('/'); } }} className="px-4 py-2 bg-zinc-900 border border-rojo-950 text-rojo-600 rounded-xl text-[9px] font-black uppercase hover:bg-rojo-600 hover:text-white transition-all">DELETE</button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* OP SECTION */}
@@ -133,6 +146,8 @@ const ThreadDetailPage: React.FC = () => {
             const isLiked = post.likedBy?.includes(currentUser?.id || '');
             const postAuthor = users.find(u => u.id === post.authorId);
             const isPostAuthorBanned = postAuthor?.status === 'Banned';
+            const isOwner = post.authorId === currentUser?.id;
+
             return (
               <div key={post.id} className={`rounded-[2rem] flex border overflow-hidden transition-all ${isDark ? 'bg-zinc-900/20 border-zinc-800 hover:border-zinc-700' : 'bg-white border-zinc-100 shadow-md'}`}>
                 <aside className={`w-24 md:w-40 p-6 md:p-8 flex flex-col items-center border-r shrink-0 ${isDark ? 'bg-black/20 border-zinc-800' : 'bg-zinc-50/50'}`}>
@@ -143,12 +158,26 @@ const ThreadDetailPage: React.FC = () => {
                   <span className="text-[7px] font-black uppercase tracking-widest text-zinc-700 mt-1">{postAuthor?.role}</span>
                 </aside>
                 <div className="flex-1 p-8 md:p-10 min-w-0 flex flex-col">
-                  <div className="flex-1 text-sm md:text-base leading-relaxed mb-6"><MediaRenderer content={post.content} isBanned={isPostAuthorBanned} /></div>
+                  {editingPostId === post.id ? (
+                    <div className="mb-6 space-y-4">
+                      <textarea value={editText} onChange={e => setEditText(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-xl p-4 text-sm text-white outline-none" rows={4} />
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEditSave(post.id)} className="bg-rojo-600 text-white px-4 py-2 rounded-lg text-[9px] font-black uppercase">Save</button>
+                        <button onClick={() => setEditingPostId(null)} className="bg-zinc-800 text-zinc-400 px-4 py-2 rounded-lg text-[9px] font-black uppercase">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 text-sm md:text-base leading-relaxed mb-6"><MediaRenderer content={post.content} isBanned={isPostAuthorBanned} /></div>
+                  )}
+                  
                   <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-zinc-600 pt-6 border-t border-zinc-800/30">
                      <div className="flex items-center gap-6">
                         <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                        {(post.authorId === currentUser?.id || isAdmin) && (
-                           <button onClick={() => { if(window.confirm('Delete reply?')) deletePost(post.id); }} className="text-rojo-900 hover:text-rojo-600 transition-all">Remove</button>
+                        {(isOwner || isAdmin) && (
+                          <div className="flex gap-4">
+                             {isOwner && <button onClick={() => { setEditingPostId(post.id); setEditText(post.content); }} className="text-zinc-400 hover:text-white transition-all">Edit</button>}
+                             <button onClick={() => { if(window.confirm('Delete reply?')) deletePost(post.id); }} className="text-rojo-900 hover:text-rojo-600 transition-all">Remove</button>
+                          </div>
                         )}
                      </div>
                      <div className="flex items-center gap-6">
