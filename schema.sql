@@ -1,5 +1,5 @@
 -- ========================================================
--- ROJOSGAMES FORUM - INTEGRATED IP TRACKING & BANNING
+-- ROJOSGAMES FORUM - ADVANCED MODERATION & PRIVACY SCHEMA
 -- ========================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -95,16 +95,42 @@ CREATE TABLE IF NOT EXISTS public.messages (
 
 -- 2. FUNCTIONS & TRIGGERS
 -- --------------------------------------------------------
+
+-- Staff check function used in RLS policies
 CREATE OR REPLACE FUNCTION public.is_staff(u_id UUID) RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = u_id AND (role = 'Admin' OR role = 'Moderator'));
 $$ LANGUAGE sql SECURITY DEFINER;
 
+-- RPC for incrementing thread views safely
+CREATE OR REPLACE FUNCTION public.increment_thread_view(t_id UUID)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.threads
+    SET view_count = view_count + 1
+    WHERE id = t_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ADMIN PRIVACY: Clear IP history when a user is promoted to Admin
+CREATE OR REPLACE FUNCTION public.handle_admin_privacy() 
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If user is an Admin, delete IP logs and wipe shorthand IP
+    IF NEW.role = 'Admin' THEN
+        DELETE FROM public.user_ips WHERE user_id = NEW.id;
+        NEW.last_ip := NULL;
+    END IF;
+    RETURN NEW;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Handle updated_at timestamps
 CREATE OR REPLACE FUNCTION public.handle_updated_at() RETURNS TRIGGER AS $$
 BEGIN 
   NEW.updated_at = NOW(); 
   RETURN NEW; 
 END; $$ LANGUAGE plpgsql;
 
+-- New user initialization from Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.profiles (id, username, display_name, email, avatar_url)
@@ -118,11 +144,15 @@ BEGIN
   RETURN NEW;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Applying Triggers
 DROP TRIGGER IF EXISTS on_profile_updated ON public.profiles;
 CREATE TRIGGER on_profile_updated BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+DROP TRIGGER IF EXISTS on_admin_privacy_check ON public.profiles;
+CREATE TRIGGER on_admin_privacy_check BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE public.handle_admin_privacy();
 
 -- 3. POLICIES
 -- --------------------------------------------------------
