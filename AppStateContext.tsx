@@ -73,32 +73,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
 
-  const mapUser = (data: any): User => {
-    const email = data.email || '';
-    const metadata = data.user_metadata || {};
-    
-    const username = data.username || metadata.username || 'Member';
-    const rawAvatar = data.avatar_url || metadata.avatar_url;
-    const isDicebear = rawAvatar?.includes('dicebear.com');
-    const avatar = (isDicebear || !rawAvatar) ? DEFAULT_AVATAR : rawAvatar;
-
-    return {
-      id: data.id,
-      username: username,
-      displayName: data.display_name || metadata.display_name || username || email.split('@')[0] || 'User',
-      email: email,
-      avatarUrl: data.status === 'Banned' ? DEFAULT_AVATAR : avatar,
-      bannerUrl: data.banner_url || metadata.banner_url || '',
-      role: data.role || 'User',
-      status: (data.status as any) || 'Active',
-      joinDate: data.join_date || data.created_at || new Date().toISOString(),
-      postCount: data.post_count || 0,
-      about: data.about || '',
-      themePreference: (data.theme_preference as ThemeMode) || 'dark',
-      banReason: data.ban_reason || data.banReason,
-      banExpires: data.ban_expires || data.banExpires,
-    };
-  };
+  const mapUser = (data: any): User => ({
+    id: data.id,
+    username: data.username || 'Member',
+    displayName: data.display_name || data.username || 'User',
+    email: data.email || '',
+    avatarUrl: data.avatar_url || DEFAULT_AVATAR,
+    bannerUrl: data.banner_url || '',
+    role: data.role || 'User',
+    status: (data.status as any) || 'Active',
+    joinDate: data.created_at || new Date().toISOString(),
+    postCount: data.post_count || 0,
+    about: data.about || '',
+    themePreference: (data.theme_preference as ThemeMode) || 'dark',
+    banReason: data.ban_reason || '',
+    banExpires: data.ban_expires || '',
+  });
 
   const mapToDb = (data: Partial<User>) => {
     const mapping: any = {};
@@ -112,84 +102,54 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.themePreference !== undefined) mapping.theme_preference = data.themePreference;
     if (data.banReason !== undefined) mapping.ban_reason = data.banReason;
     if (data.banExpires !== undefined) mapping.ban_expires = data.banExpires;
-    if (data.email !== undefined) mapping.email = data.email;
     return mapping;
   };
 
   const syncDatabase = async () => {
     try {
-      const results = await Promise.allSettled([
-        supabase.from('threads').select('*, profiles(username, display_name, status)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
+      const [threadsRes, usersRes, reportsRes, postsRes] = await Promise.all([
+        supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
-        supabase.from('posts').select('*, profiles(username, display_name, status)').order('created_at', { ascending: true })
+        supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true })
       ]);
 
-      const [threadsRes, usersRes, reportsRes, postsRes] = results as any[];
-
-      if (threadsRes.status === 'fulfilled' && threadsRes.value.data) {
-        setThreads(threadsRes.value.data.map((x: any) => ({
+      if (threadsRes.data) {
+        setThreads(threadsRes.data.map((x: any) => ({
           id: x.id, categoryId: x.category_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
           title: x.title, content: x.content, createdAt: x.created_at, replyCount: x.reply_count || 0,
           viewCount: x.view_count || 0, likes: x.likes || 0, likedBy: x.liked_by || [],
           isLocked: x.is_locked || false, isPinned: x.is_pinned || false
         })));
       }
-      if (usersRes.status === 'fulfilled' && usersRes.value.data) {
-        setUsers(usersRes.value.data.map((x: any) => mapUser(x)));
-      }
-      if (reportsRes.status === 'fulfilled' && reportsRes.value.data) {
-        setReports(reportsRes.value.data.map((x: any) => ({
+      if (usersRes.data) setUsers(usersRes.data.map(mapUser));
+      if (reportsRes.data) setReports(reportsRes.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
           authorUsername: x.author_username, targetUrl: x.target_url,
           reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
-        })));
-      }
-      if (postsRes.status === 'fulfilled' && postsRes.value.data) {
-        setPosts(postsRes.value.data.map((x: any) => ({
+      })));
+      if (postsRes.data) setPosts(postsRes.data.map((x: any) => ({
           id: x.id, threadId: x.thread_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
           content: x.content, createdAt: x.created_at, likes: x.likes || 0, likedBy: x.liked_by || []
-        })));
-      }
-      
-      if (currentUser) {
-        const { data: partners } = await supabase.from('messages')
-          .select('sender_id, receiver_id')
-          .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
-        
-        if (partners) {
-          const ids = new Set<string>();
-          partners.forEach(m => {
-            if (m.sender_id !== currentUser.id) ids.add(m.sender_id);
-            if (m.receiver_id !== currentUser.id) ids.add(m.receiver_id);
-          });
-          setAllChatPartners(Array.from(ids));
-        }
-      }
-    } catch (e) {
-      console.warn("Sync failed.");
-    }
+      })));
+    } catch (e) { console.warn("Sync error"); }
   };
 
   const loadProfile = async (id: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-    if (!error && data) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+    if (data) {
       const u = mapUser(data);
       setCurrentUser(u);
       if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
     }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-    setOriginalAdmin(null);
-  };
+  const logout = async () => { await supabase.auth.signOut(); setCurrentUser(null); setOriginalAdmin(null); };
 
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
-    const initialize = async () => {
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await loadProfile(session.user.id);
@@ -197,22 +157,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       setLoading(false);
     };
-    initialize();
+    init();
   }, []);
 
   const login = async (email: string, pass: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
-    if (data.user) {
-      await loadProfile(data.user.id);
-      await syncDatabase();
-    }
+    if (data.user) { await loadProfile(data.user.id); await syncDatabase(); }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    await supabase.auth.signUp({ 
-      email, password: pass, options: { data: { username } }
-    });
+    await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
   };
 
   const loginAs = (userId: string) => {
@@ -223,45 +178,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const revertToAdmin = () => {
-    if (originalAdmin) {
-      setCurrentUser(originalAdmin);
-      setOriginalAdmin(null);
-    }
-  };
-
+  const revertToAdmin = () => { if (originalAdmin) { setCurrentUser(originalAdmin); setOriginalAdmin(null); } };
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const dbData = mapToDb(data);
-    const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
-    if (error) {
-      console.error("Update failed:", error.message);
-      return;
-    }
+    await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
     await loadProfile(currentUser.id);
     await syncDatabase();
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    const dbData = mapToDb(data);
-    const { error } = await supabase.from('profiles').update(dbData).eq('id', userId);
-    if (error) {
-      console.error("Target update failed:", error.message);
-      return;
-    }
-    await syncDatabase();
-  };
-
-  const banUser = async (userId: string, reason: string, duration: string) => {
-    const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
-    await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
-    await syncDatabase();
-  };
-
-  const unbanUser = async (userId: string) => {
-    await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
+    await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
     await syncDatabase();
   };
 
@@ -271,15 +199,28 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  const incrementThreadView = async (threadId: string) => {
-    try {
-      await supabase.rpc('increment_thread_view', { t_id: threadId });
-    } catch (e) {
-      const t = threads.find(x => x.id === threadId);
-      if (t) {
-        await supabase.from('threads').update({ view_count: (t.viewCount || 0) + 1 }).eq('id', threadId);
-      }
-    }
+  const addPost = async (threadId: string, content: string) => {
+    if (!currentUser) return;
+    const { error } = await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
+    if (error) { console.error("Post Error:", error.message); alert("Failed to reply: " + error.message); }
+    await syncDatabase();
+  };
+
+  const deleteThread = async (id: string) => { await supabase.from('threads').delete().eq('id', id); await syncDatabase(); };
+  const deletePost = async (id: string) => { await supabase.from('posts').delete().eq('id', id); await syncDatabase(); };
+  const likePost = async (id: string) => {
+    const p = posts.find(x => x.id === id);
+    if (!p || !currentUser) return;
+    const newLikedBy = p.likedBy.includes(currentUser.id) ? p.likedBy.filter(u => u !== currentUser.id) : [...p.likedBy, currentUser.id];
+    await supabase.from('posts').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id);
+    await syncDatabase();
+  };
+  const likeThread = async (id: string) => {
+    const t = threads.find(x => x.id === id);
+    if (!t || !currentUser) return;
+    const newLikedBy = t.likedBy.includes(currentUser.id) ? t.likedBy.filter(u => u !== currentUser.id) : [...t.likedBy, currentUser.id];
+    await supabase.from('threads').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id);
+    await syncDatabase();
   };
 
   const toggleThreadPin = async (id: string) => {
@@ -294,46 +235,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  const deleteThread = async (id: string) => {
-    await supabase.from('threads').delete().eq('id', id);
+  const incrementThreadView = async (id: string) => { await supabase.rpc('increment_thread_view', { t_id: id }); };
+
+  const banUser = async (userId: string, reason: string, duration: string) => {
+    const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
+    await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
     await syncDatabase();
   };
 
-  const addPost = async (threadId: string, content: string) => {
-    if (!currentUser) return;
-    await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    await syncDatabase();
-  };
-
-  const updatePost = async (postId: string, content: string) => {
-    await supabase.from('posts').update({ content }).eq('id', postId);
-    await syncDatabase();
-  };
-
-  const deletePost = async (postId: string) => {
-    await supabase.from('posts').delete().eq('id', postId);
-    await syncDatabase();
-  };
-
-  const likePost = async (postId: string) => {
-    if (!currentUser) return;
-    const p = posts.find(x => x.id === postId);
-    if (!p) return;
-    const likedBy = p.likedBy || [];
-    const isLiked = likedBy.includes(currentUser.id);
-    const newLikedBy = isLiked ? likedBy.filter(id => id !== currentUser.id) : [...likedBy, currentUser.id];
-    await supabase.from('posts').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', postId);
-    await syncDatabase();
-  };
-
-  const likeThread = async (threadId: string) => {
-    if (!currentUser) return;
-    const t = threads.find(x => x.id === threadId);
-    if (!t) return;
-    const likedBy = t.likedBy || [];
-    const isLiked = likedBy.includes(currentUser.id);
-    const newLikedBy = isLiked ? likedBy.filter(id => id !== currentUser.id) : [...likedBy, currentUser.id];
-    await supabase.from('threads').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', threadId);
+  const unbanUser = async (userId: string) => {
+    await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
     await syncDatabase();
   };
 
@@ -343,51 +254,27 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => {
-    if (!currentUser) return;
-    const { error } = await supabase.from('reports').insert({
-      type, target_id: targetId, reported_by: currentUser.username,
-      author_username: authorUsername, target_url: targetUrl,
-      reason, content_snippet: contentSnippet, status: ModStatus.PENDING
-    });
-    if (error && error.code === '23505') {
-       alert("Already reported.");
-    } else if (error) {
-       alert("Report failed.");
-    } else {
-       alert("Flag submitted.");
-       await syncDatabase();
-    }
+    await supabase.from('reports').insert({ type, target_id: targetId, reported_by: currentUser?.username || 'Guest', author_username: authorUsername, target_url: targetUrl, reason, content_snippet: contentSnippet, status: ModStatus.PENDING });
+    await syncDatabase();
   };
 
   const sendChatMessage = async (receiverId: string, content: string) => {
-    if (!currentUser) return;
-    await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: receiverId, content });
+    await supabase.from('messages').insert({ sender_id: currentUser?.id, receiver_id: receiverId, content });
     await syncDatabase();
   };
 
   const fetchChatHistory = async (otherUserId: string) => {
-    if (!currentUser) return;
-    const { data } = await supabase.from('messages')
-      .select('*')
-      .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser.id})`)
-      .order('created_at', { ascending: true });
+    const { data } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${currentUser?.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser?.id})`).order('created_at', { ascending: true });
     if (data) setChatMessages(data as ChatMessage[]);
   };
 
-  const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) throw error;
-  };
-
-  const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) throw error;
-  };
+  const resetPassword = async (email: string) => { await supabase.auth.resetPasswordForEmail(email); };
+  const updatePassword = async (newPassword: string) => { await supabase.auth.updateUser({ password: newPassword }); };
 
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost: async() => {}, deletePost, likePost, likeThread,
       resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword
     }}>
       {children}
