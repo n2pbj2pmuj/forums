@@ -46,17 +46,21 @@ export interface User {
   banExpires?: string;
   lastIp?: string;
   isProtected?: boolean;
-  notes?: string; // Legacy field
-  mod_notes?: ModNote[]; // Structured field
+  notes?: string; 
+  mod_notes?: ModNote[]; 
   punishments?: Punishment[];
 }
 
-export interface ForumCategory {
+export interface ChatMessage {
   id: string;
-  title: string;
-  description: string;
-  icon: string;
-  threadCount: number;
+  created_at: string;
+  updated_at?: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  is_edited: boolean;
+  attachments: string[];
+  reactions: Record<string, string[]>; // emoji: [user_ids]
 }
 
 export interface Thread {
@@ -99,6 +103,23 @@ export interface Report {
   createdAt: string;
 }
 
+export interface IpBan {
+  id: string;
+  ip_address: string;
+  reason: string;
+  created_at: string;
+}
+
+// Added missing interface to fix constants.tsx error
+export interface ForumCategory {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  threadCount: number;
+}
+
+// Added missing interface to fix constants.tsx error
 export interface Game {
   id: string;
   title: string;
@@ -110,6 +131,7 @@ export interface Game {
   description: string;
 }
 
+// Added missing interface to fix constants.tsx error
 export interface CatalogItem {
   id: string;
   name: string;
@@ -119,11 +141,4 @@ export interface CatalogItem {
   creatorName: string;
   price: number;
   description: string;
-}
-
-export interface IpBan {
-  id: string;
-  ip_address: string;
-  reason: string;
-  created_at: string;
 }

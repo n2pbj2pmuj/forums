@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
@@ -18,11 +19,21 @@ const SignupPage: React.FC = () => {
     if (loading) return;
 
     setError('');
+    
+    // Validation: 3-20 chars, Alphanumeric only
+    const cleanUser = username.trim();
+    const userRegex = /^[a-zA-Z0-9]{3,20}$/;
+    
+    if (!userRegex.test(cleanUser)) {
+      setError('Username must be 3-20 characters and contain only letters and numbers.');
+      return;
+    }
+
     setSuccess(false);
     setLoading(true);
     
     try {
-      await signup(username.trim(), email.trim(), pass);
+      await signup(cleanUser, email.trim(), pass);
       setSuccess(true);
       setUsername('');
       setEmail('');
@@ -56,7 +67,7 @@ const SignupPage: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={handleSignup} className="space-y-4">
-            {error && <div className="p-3 bg-rojo-600/10 border border-rojo-600/20 text-rojo-500 text-xs font-bold rounded-lg text-center">{error}</div>}
+            {error && <div className="p-3 bg-rojo-600/10 border border-rojo-600/20 text-rojo-500 text-[10px] font-black uppercase rounded-lg text-center leading-relaxed">{error}</div>}
             
             <div>
               <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-1.5 tracking-wider">Username</label>
@@ -66,7 +77,7 @@ const SignupPage: React.FC = () => {
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-1 ring-rojo-600 outline-none transition-all text-sm"
-                placeholder="Pick a handle"
+                placeholder="Alphanumeric (3-20 chars)"
                 disabled={loading}
               />
             </div>

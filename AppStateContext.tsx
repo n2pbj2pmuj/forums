@@ -1,16 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote, ChatMessage } from './types';
 import { supabase } from './services/supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
-
-interface ChatMessage {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  content: string;
-  created_at: string;
-}
 
 interface UserIpLog {
   ip: string;
@@ -62,7 +54,10 @@ interface AppState {
   likeThread: (threadId: string) => Promise<void>;
   resolveReport: (reportId: string, status: ModStatus) => Promise<void>;
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => Promise<void>;
-  sendChatMessage: (receiverId: string, content: string) => Promise<void>;
+  sendChatMessage: (receiverId: string, content: string, attachments?: string[]) => Promise<void>;
+  deleteChatMessage: (messageId: string) => Promise<void>;
+  editChatMessage: (messageId: string, newContent: string) => Promise<void>;
+  reactToChatMessage: (messageId: string, emoji: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
   fetchUserIpHistory: (userId: string) => Promise<UserIpLog[]>;
   resetPassword: (email: string) => Promise<void>;
@@ -116,25 +111,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     punishments: Array.isArray(data.punishments) ? data.punishments : []
   });
 
-  const mapToDb = (data: Partial<User>): any => {
-    const mapping: any = {};
-    if (data.username !== undefined) mapping.username = data.username;
-    if (data.displayName !== undefined) mapping.display_name = data.displayName;
-    if (data.avatarUrl !== undefined && data.avatarUrl !== null) mapping.avatar_url = data.avatarUrl;
-    if (data.bannerUrl !== undefined && data.bannerUrl !== null) mapping.banner_url = data.bannerUrl;
-    if (data.role !== undefined) mapping.role = data.role;
-    if (data.status !== undefined) mapping.status = data.status;
-    if (data.about !== undefined) mapping.about = data.about;
-    if (data.themePreference !== undefined) mapping.theme_preference = data.themePreference;
-    if (data.banReason !== undefined) mapping.ban_reason = data.banReason;
-    if (data.banExpires !== undefined) mapping.ban_expires = data.banExpires;
-    if (data.lastIp !== undefined) mapping.last_ip = data.lastIp;
-    if (data.isProtected !== undefined) mapping.is_protected = data.isProtected;
-    if (data.mod_notes !== undefined) mapping.mod_notes = data.mod_notes;
-    if (data.punishments !== undefined) mapping.punishments = data.punishments;
-    return mapping;
-  };
-
   const syncDatabase = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -186,33 +162,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data) {
       const u = mapUser(data);
       setCurrentUser(u);
-      
       if (detectedIp && u.role !== 'Admin') {
-        if (data.last_ip !== detectedIp) {
-          await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
-        }
-        await supabase.from('user_ips').insert({
-          user_id: id,
-          ip: detectedIp,
-          user_agent: navigator.userAgent,
-          path: window.location.pathname
-        });
-      } else if (u.role === 'Admin') {
-        if (data.last_ip !== null) {
-          await supabase.from('profiles').update({ last_ip: null }).eq('id', id);
-          await supabase.from('user_ips').delete().eq('user_id', id);
-        }
+        if (data.last_ip !== detectedIp) await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
+        await supabase.from('user_ips').insert({ user_id: id, ip: detectedIp, user_agent: navigator.userAgent, path: window.location.pathname });
+      } else if (u.role === 'Admin' && data.last_ip !== null) {
+        await supabase.from('profiles').update({ last_ip: null }).eq('id', id);
+        await supabase.from('user_ips').delete().eq('user_id', id);
       }
     }
   };
 
   const logout = async () => { await supabase.auth.signOut(); setCurrentUser(null); setOriginalAdmin(null); };
-
-  const checkIpBan = async (ip: string | null) => {
-    if (!ip) return false;
-    const { data } = await supabase.from('ip_bans').select('id').eq('ip_address', ip).maybeSingle();
-    return !!data;
-  };
 
   useEffect(() => {
     if (initRef.current) return;
@@ -225,12 +185,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         detectedIp = json.ip;
         setClientIp(detectedIp);
       } catch (e) { console.warn("IP Detection Failed", e); }
-
       if (detectedIp) {
-        const isBlocked = await checkIpBan(detectedIp);
-        setIsIpBanned(isBlocked);
+        const { data } = await supabase.from('ip_bans').select('id').eq('ip_address', detectedIp).maybeSingle();
+        setIsIpBanned(!!data);
       }
-
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await loadProfile(session.user.id, detectedIp);
@@ -242,22 +200,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const isBlocked = await checkIpBan(clientIp);
-    if (isBlocked) {
-      setIsIpBanned(true);
-      throw new Error("You are forbidden from signing up or logging into accounts.");
-    }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     if (data.user) { await loadProfile(data.user.id, clientIp); await syncDatabase(); }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    const isBlocked = await checkIpBan(clientIp);
-    if (isBlocked) {
-      setIsIpBanned(true);
-      throw new Error("You are forbidden from signing up or logging into accounts.");
-    }
     await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
   };
 
@@ -274,18 +222,24 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
+    const mapping: any = {};
+    if (data.username !== undefined) mapping.username = data.username;
+    if (data.displayName !== undefined) mapping.display_name = data.displayName;
+    if (data.avatarUrl !== undefined) mapping.avatar_url = data.avatarUrl;
+    if (data.bannerUrl !== undefined) mapping.banner_url = data.bannerUrl;
+    if (data.about !== undefined) mapping.about = data.about;
+    const { error } = await supabase.from('profiles').update(mapping).eq('id', currentUser.id);
     if (error) throw error;
     await loadProfile(currentUser.id, clientIp);
     await syncDatabase();
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    if (data.role === 'Admin') {
-      await supabase.from('user_ips').delete().eq('user_id', userId);
-      (data as any).last_ip = null;
-    }
-    const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
+    const mapping: any = {};
+    if (data.role) mapping.role = data.role;
+    if (data.displayName) mapping.display_name = data.displayName;
+    if (data.status) mapping.status = data.status;
+    const { error } = await supabase.from('profiles').update(mapping).eq('id', userId);
     if (error) alert("Update failed: " + error.message);
     await syncDatabase();
   };
@@ -293,17 +247,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const logPunishment = async (userId: string, action: Punishment['action'], reason: string, expiration: string) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
-    const newPunishment: Punishment = {
-      id: Math.random().toString(36).substr(2, 6).toUpperCase(),
-      action,
-      moderator: currentUser?.username || 'System',
-      reason,
-      created_at: new Date().toISOString(),
-      expiration
-    };
+    const newPunishment: Punishment = { id: Math.random().toString(36).substr(2, 6).toUpperCase(), action, moderator: currentUser?.username || 'System', reason, created_at: new Date().toISOString(), expiration };
     const updatedPunishments = [newPunishment, ...(user.punishments || [])];
-    const { error } = await supabase.from('profiles').update({ punishments: updatedPunishments }).eq('id', userId);
-    if (error) console.error("Punishment log failed", error);
+    await supabase.from('profiles').update({ punishments: updatedPunishments }).eq('id', userId);
     await syncDatabase();
   };
 
@@ -316,7 +262,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       updatePayload.display_name = resetName;
     }
     await logPunishment(userId, 'Ban', reason, expires);
-    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId);
+    await supabase.from('profiles').update(updatePayload).eq('id', userId);
     if (doIpBan) {
       const targetUser = users.find(u => u.id === userId);
       if (targetUser?.lastIp) await supabase.from('ip_bans').insert({ ip_address: targetUser.lastIp, reason, banned_by: currentUser?.id });
@@ -339,15 +285,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateUserNotes = async (userId: string, content: string) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
-    const newNote: ModNote = {
-      id: Math.random().toString(36).substr(2, 6).toUpperCase(),
-      moderator: currentUser?.username || 'System',
-      content,
-      created_at: new Date().toISOString()
-    };
+    const newNote: ModNote = { id: Math.random().toString(36).substr(2, 6).toUpperCase(), moderator: currentUser?.username || 'System', content, created_at: new Date().toISOString() };
     const updatedNotes = [newNote, ...(user.mod_notes || [])];
-    const { error } = await supabase.from('profiles').update({ mod_notes: updatedNotes }).eq('id', userId);
-    if (error) alert("Failed to save note: " + error.message);
+    await supabase.from('profiles').update({ mod_notes: updatedNotes }).eq('id', userId);
     await syncDatabase();
   };
 
@@ -358,89 +298,76 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  const unbanIp = async (ip: string) => {
-    await supabase.from('ip_bans').delete().eq('ip_address', ip);
-    setIsIpBanned(false);
-    await syncDatabase();
-  };
-
-  const addManualIpBan = async (ip: string, reason: string) => {
-    await supabase.from('ip_bans').insert({ ip_address: ip, reason, banned_by: currentUser?.id });
-    if (ip === clientIp) setIsIpBanned(true);
-    await syncDatabase();
-  };
+  const unbanIp = async (ip: string) => { await supabase.from('ip_bans').delete().eq('ip_address', ip); setIsIpBanned(false); await syncDatabase(); };
+  const addManualIpBan = async (ip: string, reason: string) => { await supabase.from('ip_bans').insert({ ip_address: ip, reason, banned_by: currentUser?.id }); if (ip === clientIp) setIsIpBanned(true); await syncDatabase(); };
 
   const fetchUserIpHistory = async (userId: string): Promise<UserIpLog[]> => {
     const { data } = await supabase.from('user_ips').select('ip, created_at, user_agent').eq('user_id', userId).order('created_at', { ascending: false });
     return (data || []) as UserIpLog[];
   };
 
-  const addThread = async (title: string, content: string, categoryId: string) => {
-    if (!currentUser) return;
-    await supabase.from('threads').insert({ author_id: currentUser.id, title, content, category_id: categoryId });
-    await syncDatabase();
-  };
-
-  const addPost = async (threadId: string, content: string) => {
-    if (!currentUser) return;
-    await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    await syncDatabase();
-  };
-
-  const updatePost = async (postId: string, content: string) => {
-    await supabase.from('posts').update({ content }).eq('id', postId);
-    await syncDatabase();
-  };
-
+  const addThread = async (title: string, content: string, categoryId: string) => { if (!currentUser) return; await supabase.from('threads').insert({ author_id: currentUser.id, title, content, category_id: categoryId }); await syncDatabase(); };
+  const addPost = async (threadId: string, content: string) => { if (!currentUser) return; await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content }); await syncDatabase(); };
+  const updatePost = async (postId: string, content: string) => { await supabase.from('posts').update({ content }).eq('id', postId); await syncDatabase(); };
   const deleteThread = async (id: string) => { await supabase.from('threads').delete().eq('id', id); await syncDatabase(); };
   const deletePost = async (id: string) => { await supabase.from('posts').delete().eq('id', id); await syncDatabase(); };
   const likePost = async (id: string) => {
-    const p = posts.find(x => x.id === id);
-    if (!p || !currentUser) return;
+    const p = posts.find(x => x.id === id); if (!p || !currentUser) return;
     const newLikedBy = p.likedBy.includes(currentUser.id) ? p.likedBy.filter(u => u !== currentUser.id) : [...p.likedBy, currentUser.id];
-    await supabase.from('posts').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id);
-    await syncDatabase();
+    await supabase.from('posts').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id); await syncDatabase();
   };
-
   const likeThread = async (id: string) => {
-    const t = threads.find(x => x.id === id);
-    if (!t || !currentUser) return;
+    const t = threads.find(x => x.id === id); if (!t || !currentUser) return;
     const newLikedBy = t.likedBy.includes(currentUser.id) ? t.likedBy.filter(u => u !== currentUser.id) : [...t.likedBy, currentUser.id];
-    await supabase.from('threads').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id);
-    await syncDatabase();
+    await supabase.from('threads').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id); await syncDatabase();
   };
-
-  const toggleThreadPin = async (id: string) => {
-    const t = threads.find(x => x.id === id);
-    await supabase.from('threads').update({ is_pinned: !t?.isPinned }).eq('id', id);
-    await syncDatabase();
-  };
-
-  const toggleThreadLock = async (id: string) => {
-    const t = threads.find(x => x.id === id);
-    await supabase.from('threads').update({ is_locked: !t?.isLocked }).eq('id', id);
-    await syncDatabase();
-  };
-
+  const toggleThreadPin = async (id: string) => { const t = threads.find(x => x.id === id); await supabase.from('threads').update({ is_pinned: !t?.isPinned }).eq('id', id); await syncDatabase(); };
+  const toggleThreadLock = async (id: string) => { const t = threads.find(x => x.id === id); await supabase.from('threads').update({ is_locked: !t?.isLocked }).eq('id', id); await syncDatabase(); };
   const incrementThreadView = async (id: string) => { await supabase.rpc('increment_thread_view', { t_id: id }); };
-  const resolveReport = async (reportId: string, status: ModStatus) => {
-    await supabase.from('reports').update({ status }).eq('id', reportId);
-    await syncDatabase();
-  };
+  const resolveReport = async (reportId: string, status: ModStatus) => { await supabase.from('reports').update({ status }).eq('id', reportId); await syncDatabase(); };
+  const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => { await supabase.from('reports').insert({ type, target_id: targetId, reported_by: currentUser?.username || 'Guest', author_username: authorUsername, target_url: targetUrl, reason, content_snippet: contentSnippet, status: ModStatus.PENDING }); await syncDatabase(); };
 
-  const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => {
-    await supabase.from('reports').insert({ type, target_id: targetId, reported_by: currentUser?.username || 'Guest', author_username: authorUsername, target_url: targetUrl, reason, content_snippet: contentSnippet, status: ModStatus.PENDING });
-    await syncDatabase();
-  };
-
-  const sendChatMessage = async (receiverId: string, content: string) => {
-    await supabase.from('messages').insert({ sender_id: currentUser?.id, receiver_id: receiverId, content });
-    await syncDatabase();
-  };
-
+  // Advanced Chat Functions
   const fetchChatHistory = async (otherUserId: string) => {
-    const { data } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${currentUser?.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser?.id})`).order('created_at', { ascending: true });
+    if (!currentUser) return;
+    const { data } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser.id})`).order('created_at', { ascending: true });
     if (data) setChatMessages(data as ChatMessage[]);
+  };
+
+  const sendChatMessage = async (receiverId: string, content: string, attachments: string[] = []) => {
+    if (!currentUser) return;
+    await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: receiverId, content, attachments });
+    await fetchChatHistory(receiverId);
+    await syncDatabase();
+  };
+
+  const deleteChatMessage = async (messageId: string) => {
+    const msg = chatMessages.find(m => m.id === messageId);
+    if (!msg || msg.sender_id !== currentUser?.id) return;
+    await supabase.from('messages').delete().eq('id', messageId);
+    await fetchChatHistory(msg.receiver_id === currentUser.id ? msg.sender_id : msg.receiver_id);
+  };
+
+  const editChatMessage = async (messageId: string, newContent: string) => {
+    const msg = chatMessages.find(m => m.id === messageId);
+    if (!msg || msg.sender_id !== currentUser?.id) return;
+    await supabase.from('messages').update({ content: newContent, is_edited: true, updated_at: new Date().toISOString() }).eq('id', messageId);
+    await fetchChatHistory(msg.receiver_id === currentUser.id ? msg.sender_id : msg.receiver_id);
+  };
+
+  const reactToChatMessage = async (messageId: string, emoji: string) => {
+    const msg = chatMessages.find(m => m.id === messageId);
+    if (!msg || !currentUser) return;
+    const reactions = { ...msg.reactions };
+    if (!reactions[emoji]) reactions[emoji] = [];
+    if (reactions[emoji].includes(currentUser.id)) {
+      reactions[emoji] = reactions[emoji].filter(id => id !== currentUser.id);
+      if (reactions[emoji].length === 0) delete reactions[emoji];
+    } else {
+      reactions[emoji].push(currentUser.id);
+    }
+    await supabase.from('messages').update({ reactions }).eq('id', messageId);
+    await fetchChatHistory(msg.receiver_id === currentUser.id ? msg.sender_id : msg.receiver_id);
   };
 
   const resetPassword = async (email: string) => { await supabase.auth.resetPasswordForEmail(email); };
@@ -450,7 +377,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, warnUser, updateUserNotes, toggleProtectedStatus, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent
+      resolveReport, addReport, sendChatMessage, deleteChatMessage, editChatMessage, reactToChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent
     }}>
       {children}
     </AppStateContext.Provider>
