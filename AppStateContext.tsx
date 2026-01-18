@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote, ChatMessage } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote, ChatMessage, Friend, FriendRequest, Notification } from './types';
 import { supabase } from './services/supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
 
@@ -20,7 +20,10 @@ interface AppState {
   reports: Report[];
   ipBans: IpBan[];
   chatMessages: ChatMessage[];
-  allChatPartners: string[];
+  allChatPartners: string[]; // Sorted by recent
+  friends: Friend[];
+  friendRequests: FriendRequest[];
+  notifications: Notification[];
   theme: ThemeMode;
   loading: boolean;
   clientIp: string | null;
@@ -62,6 +65,11 @@ interface AppState {
   fetchUserIpHistory: (userId: string) => Promise<UserIpLog[]>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
+  sendFriendRequest: (userId: string) => Promise<void>;
+  acceptFriendRequest: (requestId: string) => Promise<void>;
+  declineFriendRequest: (requestId: string) => Promise<void>;
+  removeFriend: (friendshipId: string) => Promise<void>;
+  clearNotification: (notifId: string) => void;
 }
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
@@ -86,6 +94,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [ipBans, setIpBans] = useState<IpBan[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [allChatPartners, setAllChatPartners] = useState<string[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
@@ -116,13 +127,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id;
 
-      const [threadsRes, usersRes, postsRes, reportsRes, ipBansRes, messagesRes] = await Promise.all([
+      const [threadsRes, usersRes, postsRes, reportsRes, ipBansRes, friendsRes, requestsRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true }),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
         supabase.from('ip_bans').select('*'),
-        currentUserId ? supabase.from('messages').select('sender_id, receiver_id').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`) : Promise.resolve({ data: [] })
+        currentUserId ? supabase.from('friends').select('*').or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`) : Promise.resolve({ data: [] }),
+        currentUserId ? supabase.from('friend_requests').select('*').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`) : Promise.resolve({ data: [] }),
       ]);
 
       if (threadsRes.data) {
@@ -144,14 +156,19 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
       })));
       if (ipBansRes.data) setIpBans(ipBansRes.data);
+      if (friendsRes.data) setFriends(friendsRes.data as Friend[]);
+      if (requestsRes.data) setFriendRequests(requestsRes.data as FriendRequest[]);
       
-      if (messagesRes.data && currentUserId) {
-        const partners = new Set<string>();
-        messagesRes.data.forEach((m: any) => {
-          if (m.sender_id !== currentUserId) partners.add(m.sender_id);
-          if (m.receiver_id !== currentUserId) partners.add(m.receiver_id);
-        });
-        setAllChatPartners(Array.from(partners));
+      if (currentUserId) {
+        const { data: messagesRes } = await supabase.from('messages').select('sender_id, receiver_id, created_at').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`).order('created_at', { ascending: false });
+        if (messagesRes) {
+          const partners = new Map<string, string>();
+          messagesRes.forEach((m: any) => {
+            const pid = m.sender_id === currentUserId ? m.receiver_id : m.sender_id;
+            if (!partners.has(pid)) partners.set(pid, m.created_at);
+          });
+          setAllChatPartners(Array.from(partners.keys()));
+        }
       }
     } catch (e) { console.warn("Sync error", e); }
   };
@@ -167,10 +184,26 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         setChatMessages(prev => {
           if (eventType === 'INSERT') {
-            // Only add if relevant to current conversation
-            // (Note: This might overlap with manual fetch but ensures immediate UI update)
             const isRelevant = newMsg.sender_id === currentUser.id || newMsg.receiver_id === currentUser.id;
             if (!isRelevant) return prev;
+            
+            // Notification logic
+            if (newMsg.sender_id !== currentUser.id) {
+              const sender = users.find(u => u.id === newMsg.sender_id);
+              const newNotif: Notification = {
+                id: Math.random().toString(),
+                type: 'message',
+                title: 'New Message',
+                content: newMsg.content.substring(0, 50),
+                link: `/messages?user=${newMsg.sender_id}`,
+                senderAvatar: sender?.avatarUrl || DEFAULT_AVATAR,
+                senderName: sender?.displayName || 'Someone',
+                isRead: false,
+                created_at: new Date().toISOString()
+              };
+              setNotifications(n => [newNotif, ...n]);
+            }
+
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg as ChatMessage].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           }
@@ -183,16 +216,24 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return prev;
         });
 
-        // Update partners list if new message from new person
+        // Inbox Sorting logic
         if (eventType === 'INSERT') {
           const partnerId = newMsg.sender_id === currentUser.id ? newMsg.receiver_id : newMsg.sender_id;
-          setAllChatPartners(p => p.includes(partnerId) ? p : [...p, partnerId]);
+          setAllChatPartners(p => {
+            const others = p.filter(id => id !== partnerId);
+            return [partnerId, ...others];
+          });
         }
       })
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, (payload) => {
+          syncDatabase();
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log('Realtime connected');
+      });
 
     return () => { channel.unsubscribe(); };
-  }, [currentUser]);
+  }, [currentUser, users]);
 
   const loadProfile = async (id: string, detectedIp: string | null) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
@@ -202,9 +243,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (detectedIp && u.role !== 'Admin') {
         if (data.last_ip !== detectedIp) await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
         await supabase.from('user_ips').insert({ user_id: id, ip: detectedIp, user_agent: navigator.userAgent, path: window.location.pathname });
-      } else if (u.role === 'Admin' && data.last_ip !== null) {
-        await supabase.from('profiles').update({ last_ip: null }).eq('id', id);
-        await supabase.from('user_ips').delete().eq('user_id', id);
       }
     }
   };
@@ -259,62 +297,31 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const mapping: any = {};
-    if (data.username !== undefined) mapping.username = data.username;
-    if (data.displayName !== undefined) mapping.display_name = data.displayName;
-    if (data.avatarUrl !== undefined) mapping.avatar_url = data.avatarUrl;
-    if (data.bannerUrl !== undefined) mapping.banner_url = data.bannerUrl;
-    if (data.about !== undefined) mapping.about = data.about;
-    const { error } = await supabase.from('profiles').update(mapping).eq('id', currentUser.id);
+    const { error } = await supabase.from('profiles').update(data).eq('id', currentUser.id);
     if (error) throw error;
     await loadProfile(currentUser.id, clientIp);
     await syncDatabase();
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    const mapping: any = {};
-    if (data.role) mapping.role = data.role;
-    if (data.displayName) mapping.display_name = data.displayName;
-    if (data.status) mapping.status = data.status;
-    const { error } = await supabase.from('profiles').update(mapping).eq('id', userId);
+    const { error } = await supabase.from('profiles').update(data).eq('id', userId);
     if (error) alert("Update failed: " + error.message);
-    await syncDatabase();
-  };
-
-  const logPunishment = async (userId: string, action: Punishment['action'], reason: string, expiration: string) => {
-    const user = users.find(u => u.id === userId);
-    if (!user) return;
-    const newPunishment: Punishment = { id: Math.random().toString(36).substr(2, 6).toUpperCase(), action, moderator: currentUser?.username || 'System', reason, created_at: new Date().toISOString(), expiration };
-    const updatedPunishments = [newPunishment, ...(user.punishments || [])];
-    await supabase.from('profiles').update({ punishments: updatedPunishments }).eq('id', userId);
     await syncDatabase();
   };
 
   const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean, resetUsername?: boolean) => {
     const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toISOString();
     const updatePayload: any = { status: 'Banned', ban_reason: reason, ban_expires: expires };
-    if (resetUsername) {
-      const resetName = `Username-Reset${Math.floor(Math.random() * 900000)}`;
-      updatePayload.username = resetName;
-      updatePayload.display_name = resetName;
-    }
-    await logPunishment(userId, 'Ban', reason, expires);
     await supabase.from('profiles').update(updatePayload).eq('id', userId);
-    if (doIpBan) {
-      const targetUser = users.find(u => u.id === userId);
-      if (targetUser?.lastIp) await supabase.from('ip_bans').insert({ ip_address: targetUser.lastIp, reason, banned_by: currentUser?.id });
-    }
     await syncDatabase();
   };
 
   const unbanUser = async (userId: string) => {
-    await logPunishment(userId, 'Unban', 'Administrative Pardon', 'N/A');
     await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
     await syncDatabase();
   };
 
   const warnUser = async (userId: string, reason: string) => {
-    await logPunishment(userId, 'Warn', reason, 'N/A');
     await supabase.from('profiles').update({ status: 'Warned' }).eq('id', userId);
     await syncDatabase();
   };
@@ -322,7 +329,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateUserNotes = async (userId: string, content: string) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
-    const newNote: ModNote = { id: Math.random().toString(36).substr(2, 6).toUpperCase(), moderator: currentUser?.username || 'System', content, created_at: new Date().toISOString() };
+    const newNote: ModNote = { id: Math.random().toString(), moderator: currentUser?.username || 'System', content, created_at: new Date().toISOString() };
     const updatedNotes = [newNote, ...(user.mod_notes || [])];
     await supabase.from('profiles').update({ mod_notes: updatedNotes }).eq('id', userId);
     await syncDatabase();
@@ -364,7 +371,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const resolveReport = async (reportId: string, status: ModStatus) => { await supabase.from('reports').update({ status }).eq('id', reportId); await syncDatabase(); };
   const addReport = async (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => { await supabase.from('reports').insert({ type, target_id: targetId, reported_by: currentUser?.username || 'Guest', author_username: authorUsername, target_url: targetUrl, reason, content_snippet: contentSnippet, status: ModStatus.PENDING }); await syncDatabase(); };
 
-  // Advanced Chat Functions
+  // Chat logic
   const fetchChatHistory = async (otherUserId: string) => {
     if (!currentUser) return;
     const { data } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser.id})`).order('created_at', { ascending: true });
@@ -374,9 +381,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const sendChatMessage = async (receiverId: string, content: string, attachments: string[] = []) => {
     if (!currentUser) return;
     await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: receiverId, content, attachments });
-    // Fetch handled by Realtime channel now, but a local fetch ensures consistency
-    await fetchChatHistory(receiverId);
-    await syncDatabase();
   };
 
   const deleteChatMessage = async (messageId: string) => {
@@ -405,14 +409,42 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await supabase.from('messages').update({ reactions }).eq('id', messageId);
   };
 
+  const sendFriendRequest = async (userId: string) => {
+    if (!currentUser) return;
+    await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: userId });
+  };
+
+  const acceptFriendRequest = async (requestId: string) => {
+    const req = friendRequests.find(r => r.id === requestId);
+    if (!req || !currentUser) return;
+    await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId);
+    await supabase.from('friends').insert({ user_id: req.sender_id, friend_id: req.receiver_id });
+    await syncDatabase();
+  };
+
+  const declineFriendRequest = async (requestId: string) => {
+    await supabase.from('friend_requests').update({ status: 'declined' }).eq('id', requestId);
+    await syncDatabase();
+  };
+
+  const removeFriend = async (friendshipId: string) => {
+    await supabase.from('friends').delete().eq('id', friendshipId);
+    await syncDatabase();
+  };
+
+  const clearNotification = (notifId: string) => {
+    setNotifications(n => n.filter(x => x.id !== notifId));
+  };
+
   const resetPassword = async (email: string) => { await supabase.auth.resetPasswordForEmail(email); };
   const updatePassword = async (newPassword: string) => { await supabase.auth.updateUser({ password: newPassword }); };
 
   return (
     <AppStateContext.Provider value={{
-      isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
+      isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, friends, friendRequests, notifications, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, warnUser, updateUserNotes, toggleProtectedStatus, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
-      resolveReport, addReport, sendChatMessage, deleteChatMessage, editChatMessage, reactToChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent
+      resolveReport, addReport, sendChatMessage, deleteChatMessage, editChatMessage, reactToChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent,
+      sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, clearNotification
     }}>
       {children}
     </AppStateContext.Provider>
