@@ -110,41 +110,7 @@ export interface IpBan {
   created_at: string;
 }
 
-export interface Friend {
-  id: string;
-  user_id: string;
-  friend_id: string;
-  created_at: string;
-}
-
-export interface FriendRequest {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  status: 'pending' | 'accepted' | 'declined';
-  created_at: string;
-}
-
-export interface Block {
-  id: string;
-  blocker_id: string;
-  blocked_id: string;
-  created_at: string;
-}
-
-export interface Notification {
-  id: string;
-  type: 'message' | 'friend_request' | 'mention';
-  title: string;
-  content: string;
-  link: string;
-  senderAvatar: string;
-  senderName: string;
-  isRead: boolean;
-  created_at: string;
-}
-
-// Added missing ForumCategory interface used in constants.tsx
+// Added missing interface to fix constants.tsx error
 export interface ForumCategory {
   id: string;
   title: string;
@@ -153,7 +119,7 @@ export interface ForumCategory {
   threadCount: number;
 }
 
-// Added missing Game interface used in constants.tsx
+// Added missing interface to fix constants.tsx error
 export interface Game {
   id: string;
   title: string;
@@ -165,7 +131,7 @@ export interface Game {
   description: string;
 }
 
-// Added missing CatalogItem interface used in constants.tsx
+// Added missing interface to fix constants.tsx error
 export interface CatalogItem {
   id: string;
   name: string;

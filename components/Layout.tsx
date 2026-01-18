@@ -9,20 +9,19 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const NavLink: React.FC<{ to: string; children: React.ReactNode; active: boolean; badge?: number }> = ({ to, children, active, badge }) => {
+const NavLink: React.FC<{ to: string; children: React.ReactNode; active: boolean }> = ({ to, children, active }) => {
   const { theme } = useAppState();
   const isDark = theme === 'dark';
   return (
     <Link 
       to={to} 
-      className={`text-xs font-bold transition-all relative py-2 px-1 flex items-center gap-1 ${
+      className={`text-xs font-bold transition-all relative py-2 px-1 ${
         active 
           ? 'text-rojo-600' 
           : (isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black')
       }`}
     >
       {children}
-      {badge && badge > 0 ? <span className="bg-rojo-600 text-white text-[8px] px-1.5 py-0.5 rounded-full animate-pulse">{badge}</span> : null}
       {active && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-rojo-600 rounded-full"></span>}
     </Link>
   );
@@ -31,10 +30,8 @@ const NavLink: React.FC<{ to: string; children: React.ReactNode; active: boolean
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, originalAdmin, revertToAdmin, theme, toggleTheme, logout, isAuthenticated, notifications, clearNotification } = useAppState();
+  const { currentUser, originalAdmin, revertToAdmin, theme, toggleTheme, logout, isAuthenticated } = useAppState();
   const isDark = theme === 'dark';
-
-  const unreadCount = notifications.length;
 
   const handleLogout = () => {
     logout();
@@ -57,27 +54,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-200 ${isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-50 text-zinc-900'}`}>
-      {/* Toast Pings */}
-      <div className="fixed top-20 right-8 z-[999] space-y-3 pointer-events-none">
-        {notifications.slice(0, 3).map(notif => (
-          <div 
-            key={notif.id} 
-            onClick={() => { navigate(notif.link); clearNotification(notif.id); }}
-            className={`pointer-events-auto p-4 rounded-2xl border shadow-2xl flex items-start gap-4 cursor-pointer hover:scale-105 transition-all w-80 animate-in slide-in-from-right duration-300 ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100'}`}
-          >
-            <img src={notif.senderAvatar} className="w-10 h-10 rounded-xl border border-zinc-800" alt="" />
-            <div className="flex-1 min-w-0">
-               <p className="text-[10px] font-black uppercase text-rojo-500 tracking-widest">{notif.title}</p>
-               <p className="text-sm font-bold truncate text-zinc-200">{notif.senderName}</p>
-               <p className="text-xs text-zinc-500 truncate">{notif.content}</p>
-            </div>
-            <button onClick={(e) => { e.stopPropagation(); clearNotification(notif.id); }} className="text-zinc-700 hover:text-white">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        ))}
-      </div>
-
       {originalAdmin && (
         <div className="bg-amber-500 text-black py-2 px-8 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider z-[100] sticky top-0">
           <span>Switched to: {user.displayName} (@{user.username})</span>
@@ -96,7 +72,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <nav className="hidden md:flex space-x-8">
             <NavLink to="/" active={location.pathname === '/'}>Forums</NavLink>
             <NavLink to="/members" active={location.pathname === '/members'}>Members</NavLink>
-            <NavLink to="/messages" active={location.pathname.startsWith('/messages')} badge={unreadCount}>Inbox</NavLink>
+            <NavLink to="/messages" active={location.pathname === '/messages'}>Inbox</NavLink>
           </nav>
         </div>
 
@@ -127,7 +103,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <aside className="hidden lg:block w-72 space-y-6">
           <div className={`border rounded-2xl p-6 shadow-sm transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-6">Network Identity</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-6">Your Stats</h3>
             <div className="flex items-center space-x-4 mb-8">
                <img src={user.avatarUrl} className="w-12 h-12 rounded-xl border border-zinc-800" alt="" />
                <div className="min-w-0">
