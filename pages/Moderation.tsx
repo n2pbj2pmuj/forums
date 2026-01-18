@@ -270,7 +270,7 @@ const AdminPanel: React.FC = () => {
       {/* Permissions Modal */}
       {editingUserId && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[300] flex items-center justify-center p-6">
-           <div className={`w-full max-w-md rounded-[2.5rem] p-10 border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-slate-100'}`}>
+           <div className={`w-full max-md rounded-[2.5rem] p-10 border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-slate-100'}`}>
               <h2 className="text-xl font-black uppercase tracking-tighter mb-8 text-rojo-600">Update User</h2>
               <div className="space-y-6">
                  <div>
