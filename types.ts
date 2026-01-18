@@ -110,36 +110,6 @@ export interface IpBan {
   created_at: string;
 }
 
-export interface ForumCategory {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  threadCount: number;
-}
-
-export interface Game {
-  id: string;
-  title: string;
-  thumbnail: string;
-  activePlayers: number;
-  creatorName: string;
-  rating: number;
-  visits: number;
-  description: string;
-}
-
-export interface CatalogItem {
-  id: string;
-  name: string;
-  thumbnail: string;
-  type: string;
-  isLimited: boolean;
-  creatorName: string;
-  price: number;
-  description: string;
-}
-
 export interface Friend {
   id: string;
   user_id: string;
@@ -155,6 +125,13 @@ export interface FriendRequest {
   created_at: string;
 }
 
+export interface Block {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+}
+
 export interface Notification {
   id: string;
   type: 'message' | 'friend_request' | 'mention';
@@ -165,4 +142,37 @@ export interface Notification {
   senderName: string;
   isRead: boolean;
   created_at: string;
+}
+
+// Added missing ForumCategory interface used in constants.tsx
+export interface ForumCategory {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  threadCount: number;
+}
+
+// Added missing Game interface used in constants.tsx
+export interface Game {
+  id: string;
+  title: string;
+  thumbnail: string;
+  activePlayers: number;
+  creatorName: string;
+  rating: number;
+  visits: number;
+  description: string;
+}
+
+// Added missing CatalogItem interface used in constants.tsx
+export interface CatalogItem {
+  id: string;
+  name: string;
+  thumbnail: string;
+  type: string;
+  isLimited: boolean;
+  creatorName: string;
+  price: number;
+  description: string;
 }

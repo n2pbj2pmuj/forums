@@ -1,19 +1,12 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote, ChatMessage, Friend, FriendRequest, Notification } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote, ChatMessage, Friend, FriendRequest, Block, Notification } from './types';
 import { supabase } from './services/supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
-
-interface UserIpLog {
-  ip: string;
-  created_at: string;
-  user_agent: string;
-}
 
 interface AppState {
   isAuthenticated: boolean;
   currentUser: User | null;
-  originalAdmin: User | null;
   users: User[];
   threads: Thread[];
   posts: Post[];
@@ -23,6 +16,7 @@ interface AppState {
   allChatPartners: string[]; 
   friends: Friend[];
   friendRequests: FriendRequest[];
+  blocks: Block[];
   notifications: Notification[];
   theme: ThemeMode;
   loading: boolean;
@@ -35,6 +29,7 @@ interface AppState {
   logout: () => void;
   loginAs: (userId: string) => void;
   revertToAdmin: () => void;
+  originalAdmin: User | null;
   toggleTheme: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
   updateTargetUser: (userId: string, data: Partial<User>) => Promise<void>; 
@@ -62,13 +57,16 @@ interface AppState {
   editChatMessage: (messageId: string, newContent: string) => Promise<void>;
   reactToChatMessage: (messageId: string, emoji: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
-  fetchUserIpHistory: (userId: string) => Promise<UserIpLog[]>;
+  fetchUserIpHistory: (userId: string) => Promise<any[]>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   sendFriendRequest: (userId: string) => Promise<void>;
   acceptFriendRequest: (requestId: string) => Promise<void>;
   declineFriendRequest: (requestId: string) => Promise<void>;
-  removeFriend: (friendshipId: string) => Promise<void>;
+  cancelFriendRequest: (targetUserId: string) => Promise<void>;
+  removeFriend: (friendId: string) => Promise<void>;
+  blockUser: (userId: string) => Promise<void>;
+  unblockUser: (userId: string) => Promise<void>;
   clearNotification: (notifId: string) => void;
 }
 
@@ -96,12 +94,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [allChatPartners, setAllChatPartners] = useState<string[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [blocks, setBlocks] = useState<Block[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const initRef = useRef(false);
   const activeChatUserIdRef = useRef<string | null>(null);
 
-  // Fix: Define isAuthenticated derived from currentUser to satisfy the value prop shorthand.
   const isAuthenticated = !!currentUser;
 
   const mapUser = (data: any): User => ({
@@ -130,7 +128,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id;
 
-      const [threadsRes, usersRes, postsRes, reportsRes, ipBansRes, friendsRes, requestsRes] = await Promise.all([
+      const [threadsRes, usersRes, postsRes, reportsRes, ipBansRes, friendsRes, requestsRes, blocksRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true }),
@@ -138,6 +136,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         supabase.from('ip_bans').select('*'),
         currentUserId ? supabase.from('friends').select('*').or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`) : Promise.resolve({ data: [] }),
         currentUserId ? supabase.from('friend_requests').select('*').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`) : Promise.resolve({ data: [] }),
+        currentUserId ? supabase.from('blocks').select('*').eq('blocker_id', currentUserId) : Promise.resolve({ data: [] }),
       ]);
 
       if (threadsRes.data) {
@@ -161,9 +160,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (ipBansRes.data) setIpBans(ipBansRes.data);
       if (friendsRes.data) setFriends(friendsRes.data as Friend[]);
       if (requestsRes.data) setFriendRequests(requestsRes.data as FriendRequest[]);
+      if (blocksRes.data) setBlocks(blocksRes.data as Block[]);
       
       if (currentUserId) {
-        const { data: messagesRes } = await supabase.from('messages').select('sender_id, receiver_id, created_at').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`).order('created_at', { ascending: false });
+        const { data: messagesRes } = await supabase.from('messages')
+          .select('sender_id, receiver_id, created_at')
+          .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+          .order('created_at', { ascending: false });
+        
         if (messagesRes) {
           const partners = new Map<string, string>();
           messagesRes.forEach((m: any) => {
@@ -176,38 +180,35 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (e) { console.warn("Sync error", e); }
   };
 
-  // REALTIME SUBSCRIPTION
   useEffect(() => {
     if (!currentUser) return;
 
     const channel = supabase
-      .channel('public_realtime')
+      .channel('public_realtime_enhanced')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         const { eventType, new: newMsg, old: oldMsg } = payload;
         
-        // Handle Global Partners Sorting
         if (eventType === 'INSERT') {
-          const partnerId = newMsg.sender_id === currentUser.id ? newMsg.receiver_id : newMsg.sender_id;
-          if (partnerId) {
-            setAllChatPartners(prev => {
-              const filtered = prev.filter(id => id !== partnerId);
-              return [partnerId, ...filtered];
-            });
-          }
-        }
+          const isRelevant = newMsg.sender_id === currentUser.id || newMsg.receiver_id === currentUser.id;
+          const isFromCurrentTarget = newMsg.sender_id === activeChatUserIdRef.current || newMsg.receiver_id === activeChatUserIdRef.current;
+          
+          if (isRelevant) {
+            // Update Partner List Order
+            const partnerId = newMsg.sender_id === currentUser.id ? newMsg.receiver_id : newMsg.sender_id;
+            setAllChatPartners(prev => [partnerId, ...prev.filter(id => id !== partnerId)]);
 
-        // Handle Chat Messages Update
-        setChatMessages(prev => {
-          if (eventType === 'INSERT') {
-            const isRelevant = newMsg.sender_id === currentUser.id || newMsg.receiver_id === currentUser.id;
-            const isFromCurrentTarget = newMsg.sender_id === activeChatUserIdRef.current || newMsg.receiver_id === activeChatUserIdRef.current;
-            
-            // Only add if it belongs to the active conversation
-            if (!isRelevant || !isFromCurrentTarget) {
-              // Trigger notification if not in current chat
-              if (isRelevant && newMsg.sender_id !== currentUser.id) {
+            // Add to messages if current conversation
+            if (isFromCurrentTarget) {
+              setChatMessages(prev => {
+                if (prev.find(m => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg as ChatMessage].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              });
+            } else if (newMsg.sender_id !== currentUser.id) {
+              // Notification for background messages
+              const isBlocked = blocks.some(b => b.blocked_id === newMsg.sender_id);
+              if (!isBlocked) {
                 const sender = users.find(u => u.id === newMsg.sender_id);
-                const newNotif: Notification = {
+                setNotifications(n => [{
                   id: Math.random().toString(),
                   type: 'message',
                   title: 'New Message',
@@ -217,34 +218,27 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                   senderName: sender?.displayName || 'Someone',
                   isRead: false,
                   created_at: new Date().toISOString()
-                };
-                setNotifications(n => [newNotif, ...n.filter(x => x.link !== newNotif.link)]);
+                }, ...n.filter(x => x.link !== `/messages?user=${newMsg.sender_id}`)]);
               }
-              return prev;
             }
-
-            if (prev.find(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg as ChatMessage].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           }
-          
-          if (eventType === 'UPDATE') {
-            return prev.map(m => m.id === newMsg.id ? { ...m, ...newMsg } : m);
-          }
-          
-          if (eventType === 'DELETE') {
-            return prev.filter(m => m.id !== oldMsg.id);
-          }
-          
-          return prev;
-        });
+        }
+        
+        if (eventType === 'UPDATE') {
+          setChatMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, ...newMsg } : m));
+        }
+        
+        if (eventType === 'DELETE') {
+          setChatMessages(prev => prev.filter(m => m.id !== oldMsg.id));
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => syncDatabase())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friends' }, () => syncDatabase())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => syncDatabase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'blocks' }, () => syncDatabase())
       .subscribe();
 
     return () => { channel.unsubscribe(); };
-  }, [currentUser, users]);
+  }, [currentUser, users, blocks]);
 
   const fetchChatHistory = async (otherUserId: string) => {
     if (!currentUser) return;
@@ -256,26 +250,30 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data) setChatMessages(data as ChatMessage[]);
   };
 
+  const login = async (email: string, pass: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    if (data.user) { 
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+      if (profile) setCurrentUser(mapUser(profile));
+      await syncDatabase(); 
+    }
+  };
+
+  const signup = async (username: string, email: string, pass: string) => {
+    await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
+  };
+
   const logout = async () => { await supabase.auth.signOut(); setCurrentUser(null); setOriginalAdmin(null); };
 
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     const init = async () => {
-      let detectedIp = null;
-      try {
-        const res = await fetch('https://api.ipify.org?format=json');
-        const json = await res.json();
-        detectedIp = json.ip;
-        setClientIp(detectedIp);
-      } catch (e) { console.warn("IP Detection Failed", e); }
-      if (detectedIp) {
-        const { data } = await supabase.from('ip_bans').select('id').eq('ip_address', detectedIp).maybeSingle();
-        setIsIpBanned(!!data);
-      }
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        await loadProfile(session.user.id, detectedIp);
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+        if (profile) setCurrentUser(mapUser(profile));
         await syncDatabase();
       }
       setLoading(false);
@@ -283,23 +281,64 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     init();
   }, []);
 
-  const login = async (email: string, pass: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
-    if (data.user) { await loadProfile(data.user.id, clientIp); await syncDatabase(); }
+  // Relationship Logic
+  const sendFriendRequest = async (userId: string) => {
+    if (!currentUser) return;
+    const { error } = await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: userId, status: 'pending' });
+    if (error) {
+      if (error.code === '23505') alert("Request already sent!");
+      else throw error;
+    }
+    await syncDatabase();
   };
 
-  const signup = async (username: string, email: string, pass: string) => {
-    await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
+  const acceptFriendRequest = async (requestId: string) => {
+    const req = friendRequests.find(r => r.id === requestId);
+    if (!req || !currentUser) return;
+    await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId);
+    await supabase.from('friends').insert({ user_id: req.sender_id, friend_id: req.receiver_id });
+    await syncDatabase();
   };
 
-  const loadProfile = async (id: string, detectedIp: string | null) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-    if (data) setCurrentUser(mapUser(data));
+  const declineFriendRequest = async (requestId: string) => {
+    await supabase.from('friend_requests').delete().eq('id', requestId);
+    await syncDatabase();
   };
 
+  const cancelFriendRequest = async (targetUserId: string) => {
+    if (!currentUser) return;
+    await supabase.from('friend_requests').delete().eq('sender_id', currentUser.id).eq('receiver_id', targetUserId);
+    await syncDatabase();
+  };
+
+  const removeFriend = async (friendId: string) => {
+    if (!currentUser) return;
+    await supabase.from('friends').delete().or(`and(user_id.eq.${currentUser.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${currentUser.id})`);
+    await syncDatabase();
+  };
+
+  const blockUser = async (userId: string) => {
+    if (!currentUser) return;
+    await removeFriend(userId);
+    await cancelFriendRequest(userId);
+    await supabase.from('blocks').insert({ blocker_id: currentUser.id, blocked_id: userId });
+    await syncDatabase();
+  };
+
+  const unblockUser = async (userId: string) => {
+    if (!currentUser) return;
+    await supabase.from('blocks').delete().eq('blocker_id', currentUser.id).eq('blocked_id', userId);
+    await syncDatabase();
+  };
+
+  // Messaging Logic
   const sendChatMessage = async (receiverId: string, content: string, attachments: string[] = []) => {
     if (!currentUser) return;
+    const isBlocked = blocks.some(b => b.blocked_id === receiverId);
+    if (isBlocked) {
+      alert("You have blocked this user.");
+      return;
+    }
     await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: receiverId, content, attachments });
   };
 
@@ -320,20 +359,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const deleteChatMessage = async (id: string) => { await supabase.from('messages').delete().eq('id', id); };
   const editChatMessage = async (id: string, content: string) => { await supabase.from('messages').update({ content, is_edited: true, updated_at: new Date().toISOString() }).eq('id', id); };
 
-  const sendFriendRequest = async (userId: string) => { if (!currentUser) return; await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: userId }); await syncDatabase(); };
-  const acceptFriendRequest = async (id: string) => { 
-    const req = friendRequests.find(r => r.id === id);
-    if (!req) return;
-    await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', id);
-    await supabase.from('friends').insert({ user_id: req.sender_id, friend_id: req.receiver_id });
-    await syncDatabase();
-  };
-  const declineFriendRequest = async (id: string) => { await supabase.from('friend_requests').delete().eq('id', id); await syncDatabase(); };
-  const removeFriend = async (id: string) => { await supabase.from('friends').delete().eq('id', id); await syncDatabase(); };
-
   const clearNotification = (id: string) => setNotifications(prev => prev.filter(n => n.id !== id));
 
-  // Placeholder functions for boilerplate
+  // Placeholder functions
   const loginAs = (id: string) => { const u = users.find(x => x.id === id); if(u) setCurrentUser(u); };
   const revertToAdmin = () => { if(originalAdmin) setCurrentUser(originalAdmin); };
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -364,10 +392,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <AppStateContext.Provider value={{
-      isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, friends, friendRequests, notifications, theme, loading,
+      isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, friends, friendRequests, blocks, notifications, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, warnUser, updateUserNotes, toggleProtectedStatus, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
       resolveReport, addReport, sendChatMessage, deleteChatMessage, editChatMessage, reactToChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent,
-      sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, clearNotification
+      sendFriendRequest, acceptFriendRequest, declineFriendRequest, cancelFriendRequest, removeFriend, blockUser, unblockUser, clearNotification
     }}>
       {children}
     </AppStateContext.Provider>
