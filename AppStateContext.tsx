@@ -167,9 +167,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentUser(u);
       if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
       
-      // Update last IP if authenticated
-      if (clientIp && data.last_ip !== clientIp) {
-        await supabase.from('profiles').update({ last_ip: clientIp }).eq('id', id);
+      // Update last IP and log visit if authenticated
+      if (clientIp) {
+        if (data.last_ip !== clientIp) {
+          await supabase.from('profiles').update({ last_ip: clientIp }).eq('id', id);
+        }
+        await supabase.from('user_ips').insert({
+          user_id: id,
+          ip: clientIp,
+          user_agent: navigator.userAgent,
+          path: window.location.pathname
+        });
       }
     }
   };
