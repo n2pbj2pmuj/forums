@@ -2,11 +2,11 @@
 import React from 'react';
 import { MOCK_GAMES, ADMIN_USER } from '../constants';
 import Layout from '../components/Layout';
-import { Link } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { Link } from 'https://esm.sh/react-router-dom';
 
 const Dashboard: React.FC = () => {
   return (
-    /* Removed non-existent activeBanner prop from Layout component */
     <Layout>
       <div className="flex flex-col space-y-8">
         {/* Welcome Section */}

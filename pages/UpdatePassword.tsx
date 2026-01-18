@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { useNavigate } from 'https://esm.sh/react-router-dom';
 import { useAppState } from '../AppStateContext';
 
 const UpdatePasswordPage: React.FC = () => {

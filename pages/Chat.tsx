@@ -1,37 +1,30 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'https://esm.sh/react-router-dom';
 import { useAppState } from '../AppStateContext';
 import { ChatMessage, User } from '../types';
 import Layout from '../components/Layout';
 
-const EMOJI_OPTIONS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '💯', '✅'];
+const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '💯', '✅', '✨', '💀'];
 
 const ChatPage: React.FC = () => {
-  const { theme, users, chatMessages, fetchChatHistory, sendChatMessage, deleteChatMessage, editChatMessage, reactToChatMessage, currentUser, allChatPartners } = useAppState();
+  const { theme, users, chatMessages, fetchChatHistory, sendChatMessage, reactToChatMessage, currentUser, allChatPartners, friendRequests, acceptFriendRequest, declineFriendRequest, blocks, unblockUser } = useAppState();
   const location = useLocation();
+  const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const targetIdFromUrl = queryParams.get('user');
 
+  const [sidebarTab, setSidebarTab] = useState<'chats' | 'friends' | 'blocked'>('chats');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, msgId: string } | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editVal, setEditVal] = useState('');
-  const [pendingFiles, setPendingFiles] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isDark = theme === 'dark';
 
   const filteredContacts = useMemo(() => {
-    return users.filter(u => {
-      const isMe = u.id === currentUser?.id;
-      const isKnownPartner = allChatPartners.includes(u.id);
-      const isTargetedUser = u.id === targetIdFromUrl;
-      return !isMe && (isKnownPartner || isTargetedUser);
-    });
-  }, [users, allChatPartners, currentUser, targetIdFromUrl]);
+    return allChatPartners.map(id => users.find(u => u.id === id)).filter(Boolean) as User[];
+  }, [allChatPartners, users]);
 
   useEffect(() => {
     if (targetIdFromUrl) setSelectedUserId(targetIdFromUrl);
@@ -47,19 +40,9 @@ const ChatPage: React.FC = () => {
   }, [chatMessages]);
 
   const handleSend = () => {
-    if ((!msg.trim() && pendingFiles.length === 0) || !selectedUserId) return;
-    sendChatMessage(selectedUserId, msg, pendingFiles);
+    if (!msg.trim() || !selectedUserId) return;
+    sendChatMessage(selectedUserId, msg);
     setMsg('');
-    setPendingFiles([]);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPendingFiles([...pendingFiles, ev.target?.result as string]);
-      reader.readAsDataURL(file);
-    }
   };
 
   const handleRightClick = (e: React.MouseEvent, id: string) => {
@@ -69,212 +52,183 @@ const ChatPage: React.FC = () => {
 
   const closeMenu = () => setContextMenu(null);
 
-  const startEdit = (m: ChatMessage) => {
-    setEditingId(m.id);
-    setEditVal(m.content);
-    closeMenu();
-  };
-
-  const commitEdit = () => {
-    if (editingId) editChatMessage(editingId, editVal);
-    setEditingId(null);
-  };
-
-  const selectedUser = users.find(u => u.id === selectedUserId);
-
   const formatText = (text: string) => {
-    // Bold: **text** -> <strong>text</strong>
-    // Italic: *text* -> <em>text</em>
     return text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/\`(.*?)\`/g, '<code class="bg-black/20 px-1 rounded">$1</code>');
+      .replace(/\`(.*?)\`/g, '<code class="bg-black/20 px-1 rounded font-mono text-[13px]">$1</code>')
+      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-rojo-600 hover:underline">$1</a>');
   };
+
+  const messageGroups = useMemo(() => {
+    const groups: { date: string; messages: ChatMessage[] }[] = [];
+    let currentGroup: ChatMessage[] = [];
+    let lastDateLabel = "";
+
+    chatMessages.forEach((m, i) => {
+      const date = new Date(m.created_at);
+      const dateLabel = date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      
+      if (dateLabel !== lastDateLabel) {
+        if (currentGroup.length > 0) groups.push({ date: lastDateLabel, messages: currentGroup });
+        currentGroup = [m];
+        lastDateLabel = dateLabel;
+      } else {
+        currentGroup.push(m);
+      }
+      if (i === chatMessages.length - 1) groups.push({ date: lastDateLabel, messages: currentGroup });
+    });
+    return groups;
+  }, [chatMessages]);
+
+  const isNewBlock = (msg: ChatMessage, prev: ChatMessage | null) => {
+    if (!prev) return true;
+    if (msg.sender_id !== prev.sender_id) return true;
+    const diff = new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime();
+    return diff > 5 * 60 * 1000;
+  };
+
+  const selectedUser = users.find(u => u.id === selectedUserId);
+  const isBlocked = blocks.some(b => b.blocked_id === selectedUserId);
 
   return (
     <Layout>
       <div onClick={closeMenu} className={`border rounded-[2.5rem] overflow-hidden shadow-2xl h-[750px] flex transition-all ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-100'}`}>
-        
         {/* Sidebar */}
         <aside className={`w-80 flex flex-col border-r ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-100 bg-zinc-50'}`}>
-          <div className="p-6 border-b border-zinc-800/20">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-rojo-500">Direct Messages</h2>
+          <div className="p-3 border-b border-zinc-800/20 flex gap-1">
+            <button onClick={() => setSidebarTab('chats')} className={`flex-1 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all ${sidebarTab === 'chats' ? 'bg-rojo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900'}`}>Messages</button>
+            <button onClick={() => setSidebarTab('friends')} className={`flex-1 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all ${sidebarTab === 'friends' ? 'bg-rojo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900'}`}>Friends</button>
+            <button onClick={() => setSidebarTab('blocked')} className={`flex-1 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all ${sidebarTab === 'blocked' ? 'bg-zinc-100 text-black shadow-lg' : 'text-zinc-500 hover:bg-zinc-900'}`}>Blocked</button>
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar">
-            {filteredContacts.map(user => (
-              <div 
-                key={user.id} 
-                onClick={() => setSelectedUserId(user.id)}
-                className={`flex items-center space-x-3 p-4 cursor-pointer transition-all ${selectedUserId === user.id ? (isDark ? 'bg-rojo-500/10 border-r-4 border-rojo-500 shadow-inner' : 'bg-rojo-50 border-r-4 border-rojo-600') : 'hover:bg-zinc-900/40'}`}
-              >
-                <div className="relative">
-                  <img src={user.avatarUrl} className={`w-10 h-10 rounded-2xl border-2 transition-all ${selectedUserId === user.id ? 'border-rojo-500 scale-105' : 'border-zinc-800'}`} alt="" />
-                  <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-zinc-950 ${user.status === 'Active' ? 'bg-emerald-500' : 'bg-zinc-700'}`}></div>
+            {sidebarTab === 'chats' && filteredContacts.map(user => (
+              <div key={user.id} onClick={() => setSelectedUserId(user.id)} className={`flex items-center space-x-3 p-4 cursor-pointer transition-all border-b border-zinc-900/10 ${selectedUserId === user.id ? 'bg-rojo-600/10 border-r-4 border-rojo-600' : 'hover:bg-zinc-900/40'}`}>
+                <div className="relative shrink-0">
+                  <img src={user.avatarUrl} className="w-10 h-10 rounded-2xl border border-zinc-800" alt="" />
+                  <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-zinc-950 ${user.presenceStatus === 'Online' ? 'bg-emerald-500' : user.presenceStatus === 'Idle' ? 'bg-amber-500' : 'bg-rojo-600'}`}></div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-black truncate ${selectedUserId === user.id ? 'text-rojo-500' : 'text-zinc-400'}`}>{user.displayName}</p>
-                  <p className="text-[9px] text-zinc-500 truncate">@{user.username}</p>
+                  <p className={`text-xs font-black truncate ${selectedUserId === user.id ? 'text-rojo-500' : 'text-zinc-300'}`}>{user.displayName}</p>
+                  <p className="text-[9px] text-zinc-600 font-bold uppercase truncate">@{user.username}</p>
                 </div>
               </div>
             ))}
+            {sidebarTab === 'friends' && (
+              <div className="p-3 space-y-4">
+                 {friendRequests.filter(r => r.receiver_id === currentUser?.id && r.status === 'pending').map(req => {
+                   const sender = users.find(u => u.id === req.sender_id);
+                   return (
+                     <div key={req.id} className="p-3 bg-zinc-900/50 rounded-2xl border border-zinc-800 flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                          <img src={sender?.avatarUrl} className="w-8 h-8 rounded-xl" alt="" />
+                          <span className="text-[9px] font-black uppercase text-zinc-300">@{sender?.username}</span>
+                       </div>
+                       <div className="flex gap-1">
+                          <button onClick={() => acceptFriendRequest(req.id)} className="p-1.5 bg-emerald-600 rounded text-white text-[8px] font-black uppercase">Accept</button>
+                          <button onClick={() => declineFriendRequest(req.id)} className="p-1.5 bg-zinc-800 rounded text-rojo-500 text-[8px] font-black uppercase">Ignore</button>
+                       </div>
+                     </div>
+                   );
+                 })}
+              </div>
+            )}
           </div>
         </aside>
 
-        {/* Main Chat Area */}
+        {/* Chat Main Area */}
         <main className="flex-1 flex flex-col relative bg-transparent overflow-hidden">
           {selectedUser ? (
             <>
-              <header className={`p-4 border-b flex items-center justify-between z-10 ${isDark ? 'border-zinc-800 bg-zinc-950/80 backdrop-blur-md' : 'border-zinc-100 bg-white/80'}`}>
+              <header className="p-4 border-b flex items-center justify-between z-10 bg-zinc-950/80 backdrop-blur-md">
                 <div className="flex items-center space-x-4">
                   <img src={selectedUser.avatarUrl} className="w-8 h-8 rounded-xl border border-zinc-800" alt="" />
                   <div>
                     <p className="text-sm font-black tracking-tight">{selectedUser.displayName}</p>
-                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{selectedUser.role}</p>
+                    <p className="text-[8px] text-zinc-500 uppercase font-black">{selectedUser.presenceStatus}</p>
                   </div>
                 </div>
               </header>
 
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
-                {chatMessages.map(m => {
-                  const isMe = m.sender_id === currentUser?.id;
-                  const sender = isMe ? currentUser : selectedUser;
-                  return (
-                    <div 
-                      key={m.id} 
-                      onContextMenu={(e) => handleRightClick(e, m.id)}
-                      className={`group flex items-start gap-4 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
-                    >
-                      <img src={sender?.avatarUrl} className="w-8 h-8 rounded-xl shadow-lg border border-zinc-800 shrink-0 mt-1" alt="" />
-                      <div className={`flex flex-col space-y-1 max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                        <div className="flex items-center gap-2 px-1">
-                          <span className="text-[10px] font-black uppercase tracking-tight text-zinc-500">{sender?.displayName}</span>
-                          <span className="text-[8px] text-zinc-700 font-bold uppercase">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        
-                        <div className={`relative px-4 py-3 rounded-[1.25rem] text-sm shadow-xl transition-all ${
-                          isMe ? 'bg-rojo-600 text-white rounded-tr-none' : `rounded-tl-none border ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-zinc-100'}`
-                        }`}>
-                          {editingId === m.id ? (
-                            <div className="space-y-2">
-                              <textarea 
-                                value={editVal} 
-                                onChange={e => setEditVal(e.target.value)} 
-                                className="w-full bg-black/20 border-none text-white outline-none resize-none p-1" 
-                                autoFocus
-                                onKeyDown={e => e.key === 'Enter' && commitEdit()}
-                              />
-                              <p className="text-[8px] opacity-60">Escape to cancel • Enter to save</p>
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-1 no-scrollbar">
+                {messageGroups.map((group) => (
+                  <div key={group.date} className="space-y-1">
+                    <div className="flex items-center my-8">
+                       <div className="flex-1 h-px bg-zinc-800/20"></div>
+                       <span className="px-4 text-[9px] font-black uppercase tracking-widest text-zinc-600">{group.date}</span>
+                       <div className="flex-1 h-px bg-zinc-800/20"></div>
+                    </div>
+                    {group.messages.map((m, i) => {
+                      const isNew = isNewBlock(m, i > 0 ? group.messages[i-1] : null);
+                      const isMe = m.sender_id === currentUser?.id;
+                      const sender = isMe ? currentUser : selectedUser;
+                      return (
+                        <div key={m.id} onContextMenu={(e) => handleRightClick(e, m.id)} className={`group relative flex items-start px-4 py-0.5 hover:bg-zinc-900/10 transition-colors ${isNew ? 'mt-4' : ''}`}>
+                          {isNew ? (
+                            <div className="flex gap-4 w-full">
+                              <img src={sender?.avatarUrl} className="w-10 h-10 rounded-2xl shrink-0 mt-1 cursor-pointer" alt="" onClick={() => navigate(`/profile/${sender?.id}`)} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                   <span className={`text-[11px] font-black uppercase ${isMe ? 'text-rojo-500' : 'text-zinc-300'}`}>{sender?.displayName}</span>
+                                   <span className="text-[8px] text-zinc-700 font-bold uppercase">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div dangerouslySetInnerHTML={{ __html: formatText(m.content) }} className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap break-words" />
+                                <ReactionsDisplay m={m} currentUser={currentUser} onReact={reactToChatMessage} />
+                              </div>
                             </div>
                           ) : (
-                            <>
-                              <div dangerouslySetInnerHTML={{ __html: formatText(m.content) }} className="leading-relaxed" />
-                              {m.attachments?.map((url, i) => (
-                                <div key={i} className="mt-3 rounded-lg overflow-hidden border border-black/10">
-                                  {url.startsWith('data:video') ? <video controls src={url} className="max-w-full" /> : <img src={url} className="max-w-full" alt="" />}
-                                </div>
-                              ))}
-                            </>
+                            <div className="flex gap-4 w-full pl-14 group">
+                               <div className="absolute left-4 top-1.5 text-[8px] text-zinc-800 font-black opacity-0 group-hover:opacity-100 transition-opacity uppercase">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                               <div className="flex-1 min-w-0">
+                                 <div dangerouslySetInnerHTML={{ __html: formatText(m.content) }} className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap break-words" />
+                                 <ReactionsDisplay m={m} currentUser={currentUser} onReact={reactToChatMessage} />
+                               </div>
+                            </div>
                           )}
-                          {m.is_edited && <span className="absolute -bottom-4 right-0 text-[8px] opacity-40 uppercase font-black">Edited</span>}
                         </div>
-
-                        {/* Reactions */}
-                        {Object.keys(m.reactions || {}).length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {Object.entries(m.reactions).map(([emoji, uids]) => (
-                              <button 
-                                key={emoji} 
-                                onClick={() => reactToChatMessage(m.id, emoji)}
-                                className={`px-2 py-0.5 rounded-lg border text-[10px] flex items-center gap-1 transition-all ${uids.includes(currentUser?.id || '') ? 'bg-rojo-600/20 border-rojo-600 text-rojo-500' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-rojo-500'}`}
-                              >
-                                {emoji} <span className="font-black">{uids.length}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
 
-              {/* Input Area */}
-              <div className={`p-6 border-t ${isDark ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-100 bg-white'}`}>
-                {pendingFiles.length > 0 && (
-                  <div className="flex gap-2 mb-4">
-                    {pendingFiles.map((f, i) => (
-                      <div key={i} className="relative w-16 h-16 rounded-xl border border-zinc-800 overflow-hidden group">
-                        <img src={f} className="w-full h-full object-cover" alt="" />
-                        <button onClick={() => setPendingFiles(p => p.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-rojo-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                      </div>
-                    ))}
+              <div className="p-6 border-t border-zinc-800 bg-zinc-950/50">
+                {!isBlocked ? (
+                  <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-2 ring-rojo-600/50 focus-within:ring-2 transition-all">
+                    <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder={`Message @${selectedUser.displayName}...`} className="flex-1 bg-transparent border-none outline-none text-sm p-2 text-zinc-100" />
+                    <button onClick={handleSend} className="bg-rojo-600 text-white p-2.5 rounded-xl transition-transform active:scale-95"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>
                   </div>
-                )}
-                <div className="flex items-center gap-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl px-4 py-2 focus-within:ring-2 ring-rojo-600/50 transition-all">
-                  <button onClick={() => fileInputRef.current?.click()} className="text-zinc-500 hover:text-rojo-500 transition-colors">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  </button>
-                  <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-                  <input 
-                    value={msg}
-                    onChange={e => setMsg(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder={`Message @${selectedUser.displayName}...`}
-                    className="flex-1 bg-transparent border-none outline-none text-sm p-2 text-zinc-100"
-                  />
-                  <button onClick={handleSend} className="bg-rojo-600 text-white p-2.5 rounded-xl hover:bg-rojo-500 transition-all">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                  </button>
-                </div>
+                ) : <div className="p-4 bg-zinc-900 rounded-2xl text-center text-rojo-600 text-[10px] font-black uppercase tracking-widest">User Blocked</div>}
               </div>
             </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center opacity-20">
-              <p className="font-black uppercase tracking-[0.5em] text-xs">Awaiting Connection</p>
-            </div>
-          )}
+          ) : <div className="flex-1 flex items-center justify-center opacity-20 p-20 text-center"><p className="font-black uppercase tracking-[0.5em] text-xs">Select a Conversation</p></div>}
         </main>
       </div>
 
-      {/* Context Menu */}
       {contextMenu && (
-        <div 
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="fixed z-[999] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden w-48 p-1 animate-in zoom-in duration-100"
-        >
-          <div className="p-2 flex flex-wrap gap-1 border-b border-zinc-900 mb-1">
-            {EMOJI_OPTIONS.map(e => (
-              <button 
-                key={e} 
-                onClick={() => { reactToChatMessage(contextMenu.msgId, e); closeMenu(); }}
-                className="hover:bg-zinc-900 p-1.5 rounded transition-colors text-lg"
-              >
-                {e}
-              </button>
-            ))}
+        <div style={{ top: contextMenu.y, left: contextMenu.x }} className="fixed z-[999] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl w-64 p-2 animate-in zoom-in duration-100 origin-top-left">
+          <div className="p-2 flex flex-wrap gap-1.5 border-b border-zinc-900 mb-2">
+            {QUICK_EMOJIS.map(e => <button key={e} onClick={() => { reactToChatMessage(contextMenu.msgId, e); closeMenu(); }} className="hover:scale-125 p-2 transition-all text-lg">{e}</button>)}
           </div>
-          {chatMessages.find(m => m.id === contextMenu.msgId)?.sender_id === currentUser?.id && (
-            <>
-              <MenuBtn onClick={() => startEdit(chatMessages.find(m => m.id === contextMenu.msgId)!)}>Edit Message</MenuBtn>
-              <MenuBtn color="text-rojo-500" onClick={() => { deleteChatMessage(contextMenu.msgId); closeMenu(); }}>Delete Message</MenuBtn>
-            </>
-          )}
-          <MenuBtn onClick={() => { navigator.clipboard.writeText(chatMessages.find(m => m.id === contextMenu.msgId)?.content || ''); closeMenu(); }}>Copy Text</MenuBtn>
+          <button onClick={() => { closeMenu(); }} className="w-full text-left px-3 py-2 text-[9px] font-black uppercase text-zinc-400 hover:bg-zinc-900 rounded-xl">Copy Text</button>
         </div>
       )}
     </Layout>
   );
 };
 
-const MenuBtn: React.FC<{ children: React.ReactNode, onClick: () => void, color?: string }> = ({ children, onClick, color }) => (
-  <button 
-    onClick={onClick}
-    className={`w-full text-left px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-rojo-600 hover:text-white rounded transition-all ${color || 'text-zinc-400'}`}
-  >
-    {children}
-  </button>
-);
+const ReactionsDisplay: React.FC<{ m: ChatMessage, currentUser: any, onReact: any }> = ({ m, currentUser, onReact }) => {
+  if (!m.reactions || Object.keys(m.reactions).length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {Object.entries(m.reactions).map(([emoji, uids]) => (
+        <button key={emoji} onClick={() => onReact(m.id, emoji)} className={`px-2 py-1 rounded-xl border-2 flex items-center gap-2 transition-all hover:scale-105 ${uids.includes(currentUser?.id || '') ? 'bg-rojo-600/10 border-rojo-600 text-rojo-500' : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}>
+          <span className="text-sm">{emoji}</span>
+          <span className="text-[10px] font-black">{uids.length}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
 
 export default ChatPage;

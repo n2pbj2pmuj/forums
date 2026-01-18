@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { useParams, Link } from 'https://esm.sh/react-router-dom';
 import { MOCK_GAMES, MOCK_CATALOG } from '../constants';
 import Layout from '../components/Layout';
 
@@ -71,8 +72,8 @@ const DetailPage: React.FC<{ type: 'game' | 'item' }> = ({ type }) => {
             </div>
 
             <div className="mt-auto pt-8 flex space-x-4">
-              <button className="flex-1 border-2 border-gray-200 rounded py-2 text-xs font-black uppercase text-gray-500 hover:bg-gray-50 transition">Favorite</button>
-              <button className="flex-1 border-2 border-gray-200 rounded py-2 text-xs font-black uppercase text-gray-500 hover:bg-gray-50 transition">Follow</button>
+              <button className="flex-1 border-2 border-gray-200 rounded py-2 text-xs font-black uppercase text-gray-500 hover:bg-0 transition">Favorite</button>
+              <button className="flex-1 border-2 border-gray-200 rounded py-2 text-xs font-black uppercase text-gray-500 hover:bg-0 transition">Follow</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppState } from '../AppStateContext';
-import { useNavigate } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { useNavigate } from 'https://esm.sh/react-router-dom';
 
 const BannedPage: React.FC = () => {
   const { logout, currentUser, isIpBanned } = useAppState();

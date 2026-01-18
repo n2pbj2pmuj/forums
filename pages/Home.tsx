@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { useAppState, censorText } from '../AppStateContext';
 import Layout from '../components/Layout';
-import { Link } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { Link } from 'https://esm.sh/react-router-dom';
 import { DEFAULT_AVATAR } from '../constants';
 
 const HomePage: React.FC = () => {

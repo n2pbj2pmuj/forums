@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { Link } from 'https://esm.sh/react-router-dom';
 import { MOCK_GAMES } from '../constants';
 import Layout from '../components/Layout';
 

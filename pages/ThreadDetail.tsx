@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { useParams, Link, useNavigate } from 'https://esm.sh/react-router-dom';
 import { useAppState, censorText } from '../AppStateContext';
 import Layout from '../components/Layout';
 import { ReportType } from '../types';

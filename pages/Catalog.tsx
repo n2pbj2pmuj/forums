@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { MOCK_CATALOG } from '../constants';
 import Layout from '../components/Layout';
-import { Link } from 'react-router-dom';
+// Fix: Use absolute ESM path to resolve exported member errors
+import { Link } from 'https://esm.sh/react-router-dom';
 
 const CatalogPage: React.FC = () => {
   const [filter, setFilter] = useState('All');

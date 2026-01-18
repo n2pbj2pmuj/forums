@@ -1,20 +1,19 @@
 
 import React, { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { AppStateProvider, useAppState } from './AppStateContext';
-import { supabase } from './services/supabaseClient';
-import HomePage from './pages/Home';
-import ModerationPanel from './pages/Moderation';
-import ChatPage from './pages/Chat';
-import BannedPage from './pages/Banned';
-import ThreadDetailPage from './pages/ThreadDetail';
-import ProfilePage from './pages/Profile';
-import SettingsPage from './pages/Settings';
-import MembersPage from './pages/Members';
-import LoginPage from './pages/Login';
-import SignupPage from './pages/Signup';
-import ForgotPasswordPage from './pages/ForgotPassword';
-import UpdatePasswordPage from './pages/UpdatePassword';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'https://esm.sh/react-router-dom';
+import { AppStateProvider, useAppState } from './AppStateContext.tsx';
+import { supabase } from './services/supabaseClient.ts';
+import HomePage from './pages/Home.tsx';
+import ModerationPanel from './pages/Moderation.tsx';
+import ChatPage from './pages/Chat.tsx';
+import BannedPage from './pages/Banned.tsx';
+import ThreadDetailPage from './pages/ThreadDetail.tsx';
+import Profile from './pages/Profile.tsx';
+import LoginPage from './pages/Login.tsx';
+import SignupPage from './pages/Signup.tsx';
+import ForgotPasswordPage from './pages/ForgotPassword.tsx';
+import UpdatePasswordPage from './pages/UpdatePassword.tsx';
+import MembersPage from './pages/Members.tsx';
 
 const GlobalAuthHandler: React.FC = () => {
   const navigate = useNavigate();
@@ -42,32 +41,15 @@ const ProtectedRoutes: React.FC = () => {
     );
   }
 
-  // Mandatory IP Ban Check
-  if (isIpBanned && location.pathname !== '/banned') {
-    return <Navigate to="/banned" replace />;
-  }
+  if (isIpBanned && location.pathname !== '/banned') return <Navigate to="/banned" replace />;
 
   const isExempt = ['/login', '/signup', '/forgot-password', '/update-password'].includes(location.pathname);
-  
-  if (!isAuthenticated && !isExempt) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!isAuthenticated && !isExempt) return <Navigate to="/login" replace />;
 
-  // Redirect banned users to the ban page
-  if (currentUser?.status === 'Banned' && location.pathname !== '/banned') {
-    return <Navigate to="/banned" replace />;
-  }
+  if (currentUser?.status === 'Banned' && location.pathname !== '/banned') return <Navigate to="/banned" replace />;
 
-  // Redirect active users AWAY from the ban page
-  if (!isIpBanned && currentUser?.status !== 'Banned' && location.pathname === '/banned') {
-    return <Navigate to="/" replace />;
-  }
-
-  // Admin Panel Protection Logic
   const isStaff = currentUser?.role === 'Admin' || currentUser?.role === 'Moderator';
-  if (location.pathname === '/admin' && !isStaff) {
-    return <Navigate to="/" replace />;
-  }
+  if (location.pathname === '/admin' && !isStaff) return <Navigate to="/" replace />;
 
   return (
     <Routes>
@@ -75,9 +57,8 @@ const ProtectedRoutes: React.FC = () => {
       <Route path="/admin" element={<ModerationPanel />} />
       <Route path="/messages" element={<ChatPage />} />
       <Route path="/thread/:id" element={<ThreadDetailPage />} />
-      <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/profile/:id" element={<ProfilePage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/profile/:id" element={<Profile />} />
       <Route path="/members" element={<MembersPage />} />
       <Route path="/banned" element={<BannedPage />} />
       <Route path="/update-password" element={<UpdatePasswordPage />} />

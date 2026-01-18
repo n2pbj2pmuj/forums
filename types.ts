@@ -12,6 +12,7 @@ export enum ReportType {
 }
 
 export type ThemeMode = 'light' | 'dark';
+export type PresenceStatus = 'Online' | 'Idle' | 'DND';
 
 export interface Punishment {
   id: string;
@@ -38,6 +39,7 @@ export interface User {
   bannerUrl?: string;
   role: 'User' | 'Moderator' | 'Admin';
   status: 'Active' | 'Warned' | 'Banned';
+  presenceStatus?: PresenceStatus;
   joinDate: string;
   postCount: number;
   about?: string;
@@ -110,7 +112,6 @@ export interface IpBan {
   created_at: string;
 }
 
-// Added missing interface to fix constants.tsx error
 export interface ForumCategory {
   id: string;
   title: string;
@@ -119,7 +120,6 @@ export interface ForumCategory {
   threadCount: number;
 }
 
-// Added missing interface to fix constants.tsx error
 export interface Game {
   id: string;
   title: string;
@@ -131,7 +131,6 @@ export interface Game {
   description: string;
 }
 
-// Added missing interface to fix constants.tsx error
 export interface CatalogItem {
   id: string;
   name: string;
@@ -141,4 +140,38 @@ export interface CatalogItem {
   creatorName: string;
   price: number;
   description: string;
+}
+
+export interface Friend {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  created_at: string;
+}
+
+export interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+}
+
+export interface Block {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  content: string;
+  link: string;
+  senderAvatar: string;
+  senderName: string;
+  isRead: boolean;
+  created_at: string;
 }
