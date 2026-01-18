@@ -1,11 +1,9 @@
 -- ========================================================
--- ROJOSGAMES FORUM - FINAL STABLE SCHEMA
+-- ROJOSGAMES FORUM - STABLE SCHEMA FIX
 -- ========================================================
 
--- 1. BASE TABLES
+-- 1. BASE TABLES & COLUMN CHECKS
 -- --------------------------------------------------------
-
--- Profiles
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -24,11 +22,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Threads
 CREATE TABLE IF NOT EXISTS public.threads (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     author_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
@@ -41,11 +37,9 @@ CREATE TABLE IF NOT EXISTS public.threads (
     is_pinned BOOLEAN DEFAULT FALSE
 );
 
--- Posts
 CREATE TABLE IF NOT EXISTS public.posts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     thread_id UUID REFERENCES public.threads(id) ON DELETE CASCADE NOT NULL,
     author_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     content TEXT NOT NULL,
@@ -53,7 +47,24 @@ CREATE TABLE IF NOT EXISTS public.posts (
     liked_by UUID[] DEFAULT '{}'
 );
 
--- 2. FUNCTIONS (With Clean Drops to prevent name mismatch errors)
+-- ENSURE MISSING COLUMNS EXIST (Fixes "record new has no field updated_at")
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='updated_at') THEN
+        ALTER TABLE public.profiles ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='threads' AND column_name='updated_at') THEN
+        ALTER TABLE public.threads ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='updated_at') THEN
+        ALTER TABLE public.posts ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='banner_url') THEN
+        ALTER TABLE public.profiles ADD COLUMN banner_url TEXT;
+    END IF;
+END $$;
+
+-- 2. FUNCTIONS (Clean Drop to fix "cannot change name of input parameter")
 -- --------------------------------------------------------
 DROP FUNCTION IF EXISTS public.is_staff(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION public.is_staff(u_id UUID) RETURNS BOOLEAN AS $$
@@ -61,7 +72,10 @@ CREATE OR REPLACE FUNCTION public.is_staff(u_id UUID) RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.handle_updated_at() RETURNS TRIGGER AS $$
-BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;
+BEGIN 
+  NEW.updated_at = NOW(); 
+  RETURN NEW; 
+END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $$
 BEGIN
@@ -90,7 +104,7 @@ CREATE TRIGGER on_post_updated BEFORE UPDATE ON public.posts FOR EACH ROW EXECUT
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 4. POLICIES (Full Reset for Idempotency)
+-- 4. POLICIES (Full Reset)
 -- --------------------------------------------------------
 DO $$
 DECLARE

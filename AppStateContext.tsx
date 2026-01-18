@@ -107,10 +107,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const syncDatabase = async () => {
     try {
-      const [threadsRes, usersRes, reportsRes, postsRes] = await Promise.all([
+      const [threadsRes, usersRes, postsRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
-        supabase.from('reports').select('*').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true })
       ]);
 
@@ -123,11 +122,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         })));
       }
       if (usersRes.data) setUsers(usersRes.data.map(mapUser));
-      if (reportsRes.data) setReports(reportsRes.data.map((x: any) => ({
-          id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
-          authorUsername: x.author_username, targetUrl: x.target_url,
-          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
-      })));
       if (postsRes.data) setPosts(postsRes.data.map((x: any) => ({
           id: x.id, threadId: x.thread_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
           content: x.content, createdAt: x.created_at, likes: x.likes || 0, likedBy: x.liked_by || []
@@ -183,8 +177,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const dbPayload = mapToDb(data);
-    const { error } = await supabase.from('profiles').update(dbPayload).eq('id', currentUser.id);
+    const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
     if (error) {
       console.error("Update Error:", error.message);
       alert("Failed to update profile: " + error.message);
