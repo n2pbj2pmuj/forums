@@ -54,7 +54,6 @@ interface AppState {
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
 
-// Helper for censoring text
 export const censorText = (text: string) => {
   return text.split('').map(char => (char === ' ' || char === '\n' ? char : '█')).join('');
 };
@@ -79,8 +78,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const email = data.email || '';
     const metadata = data.user_metadata || {};
     const username = data.username || metadata.username || 'Member';
-    
-    // Force default PFP logic for placeholders or banned users
     const rawAvatar = data.avatar_url || metadata.avatar_url;
     const isDicebear = rawAvatar?.includes('dicebear.com');
     const avatar = (isDicebear || !rawAvatar) ? DEFAULT_AVATAR : rawAvatar;
@@ -91,7 +88,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       displayName: data.display_name || metadata.display_name || username || email.split('@')[0] || 'User',
       email: email,
       avatarUrl: data.status === 'Banned' ? DEFAULT_AVATAR : avatar,
-      bannerUrl: data.banner_url || metadata.banner_url,
+      bannerUrl: data.banner_url || metadata.banner_url || '',
       role: data.role || 'User',
       status: (data.status as any) || 'Active',
       joinDate: data.join_date || data.created_at || new Date().toISOString(),
@@ -227,6 +224,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
     await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
     await loadProfile(currentUser.id);
+    await syncDatabase();
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
@@ -333,12 +331,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reason, content_snippet: contentSnippet, status: ModStatus.PENDING
     });
     if (error && error.code === '23505') {
-       alert("This item is already under review by our moderation team.");
+       alert("Already reported.");
     } else if (error) {
-       console.error("Report Error:", error);
-       alert("Failed to submit report. Please try again later.");
+       alert("Report failed.");
     } else {
-       alert("Report filed successfully. Thank you for your feedback.");
+       alert("Flag submitted.");
        await syncDatabase();
     }
   };

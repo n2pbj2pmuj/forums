@@ -1,56 +1,35 @@
-
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
+
+const OFFICIAL_LOGO = 'https://cdn.discordapp.com/attachments/857780833967276052/1462268781035257876/8vNx0KgNUIAAAAXV5kBICzjE2Ar5tOA8BqBAAAgCL7afqZ5F3G5QDfkrzfdCAAVnPneDxuPQMAAACwMBsAAAAAUEAAAAAAgAICAAAAABQQAAAAAKCAAAAAAAAFBAAAAAAoIAAAAABAAQEAAAAACggAAAAAUEAAAAAAgAICAAAAABQQAAAAAKCAAAAAAAAFBAAAAAAoIAAAAABAAQEAAAAACvwB3GyoTaCTr1QAAAAASUVORK5CYII.png?ex=696d936d&is=696c41ed&hm=0494b9036feb3cd27412dfdaa7c7145b3093e0a11ae37613e21fb1b644aae6c1&';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-interface NavLinkProps {
-  to: string;
-  children: React.ReactNode;
-  active: boolean;
-}
-
-const NavLink: React.FC<NavLinkProps> = ({ to, children, active }) => {
+const NavLink: React.FC<{ to: string; children: React.ReactNode; active: boolean }> = ({ to, children, active }) => {
   const { theme } = useAppState();
   const isDark = theme === 'dark';
-
   return (
     <Link 
       to={to} 
-      className={`text-xs font-bold uppercase tracking-widest transition-all relative py-1 ${
+      className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-1 ${
         active 
-          ? (isDark ? 'text-rojo-500' : 'text-rojo-600') 
-          : (isDark ? 'text-slate-500 hover:text-slate-300' : (isDark ? 'text-slate-500 hover:text-slate-900' : 'text-slate-500 hover:text-slate-900'))
+          ? 'text-rojo-500' 
+          : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-900')
       }`}
     >
       {children}
-      {active && <span className={`absolute -bottom-1 left-0 w-full h-0.5 rounded-full ${isDark ? 'bg-rojo-500 shadow-[0_0_10px_rgba(255,0,0,1)]' : 'bg-rojo-600'}`}></span>}
+      {active && <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-rojo-600 rounded-full shadow-[0_0_10px_rgba(255,0,0,0.5)]"></span>}
     </Link>
   );
 };
-
-const SplatterIcon = () => (
-  <svg className="w-8 h-8 text-rojo-600 drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]" viewBox="0 0 100 100" fill="currentColor">
-    <circle cx="50" cy="50" r="20" />
-    <circle cx="35" cy="40" r="12" />
-    <circle cx="65" cy="45" r="10" />
-    <circle cx="55" cy="65" r="14" />
-    <circle cx="40" cy="60" r="8" />
-    <circle cx="25" cy="50" r="6" />
-    <circle cx="75" cy="55" r="7" />
-    <circle cx="45" cy="25" r="5" />
-    <circle cx="60" cy="30" r="6" />
-  </svg>
-);
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, originalAdmin, revertToAdmin, theme, toggleTheme, logout, isAuthenticated } = useAppState();
-
   const isDark = theme === 'dark';
 
   const handleLogout = () => {
@@ -58,40 +37,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
-  if (!isAuthenticated && location.pathname !== '/login' && location.pathname !== '/signup') {
+  if (!isAuthenticated && !['/login', '/signup', '/forgot-password', '/update-password'].includes(location.pathname)) {
     return null;
   }
 
+  // Fixed: Added missing joinDate and other properties to ensure the guest object matches the User interface requirements used in sidebar stats.
   const user = currentUser || { 
-    displayName: 'Loading...', 
-    username: '...', 
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=loading',
-    role: 'User',
-    postCount: 0
+    id: 'guest',
+    displayName: 'Guest', 
+    username: 'guest', 
+    avatarUrl: '', 
+    role: 'User' as const, 
+    postCount: 0,
+    joinDate: new Date().toISOString()
   };
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-[#0a0202] text-slate-100' : 'bg-[#FFF8F8] text-slate-900'}`}>
-      
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-[#050101] text-slate-100' : 'bg-[#FFFBFB] text-slate-900'}`}>
       {originalAdmin && (
-        <div className="bg-amber-500 text-black py-2 px-6 flex items-center justify-between text-[10px] font-black uppercase tracking-wider z-[60]">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            Logged in as User: {user.displayName} (@{user.username})
-          </div>
-          <button onClick={revertToAdmin} className="bg-black text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition shadow-lg">Back to Admin Account</button>
+        <div className="bg-amber-500 text-black py-2 px-6 flex items-center justify-between text-[10px] font-black uppercase tracking-wider z-[100] sticky top-0">
+          <span>Logged in as: {user.displayName} (@{user.username})</span>
+          <button onClick={revertToAdmin} className="bg-black text-white px-3 py-1 rounded-md hover:opacity-80 transition">Revert to Admin</button>
         </div>
       )}
 
-      <header className={`h-16 border-b sticky top-0 z-50 flex items-center justify-between px-6 backdrop-blur-md transition-all ${isDark ? 'bg-black/90 border-rojo-900/50 shadow-[0_0_20px_rgba(255,0,0,0.1)]' : 'bg-white/90 border-rojo-100'}`}>
+      <header className={`h-20 border-b sticky ${originalAdmin ? 'top-10' : 'top-0'} z-50 flex items-center justify-between px-8 backdrop-blur-xl transition-all ${isDark ? 'bg-black/80 border-rojo-900/40' : 'bg-white/80 border-rojo-100'}`}>
         <div className="flex items-center space-x-12">
-          <Link to="/" className="flex items-center gap-2 group">
-            <SplatterIcon />
-            <span className={`text-2xl font-black tracking-tight ${isDark ? 'text-rojo-500' : 'text-rojo-600'}`}>
-              Rojos<span className={isDark ? 'text-white' : 'text-slate-900'}>Games</span>
+          <Link to="/" className="flex items-center gap-4 group">
+            <img src={OFFICIAL_LOGO} className="h-10 w-10 object-contain drop-shadow-[0_0_8px_rgba(255,0,0,0.4)] group-hover:scale-110 transition-transform" alt="RojosGames" />
+            <span className={`text-xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Rojos<span className="text-rojo-600">Games</span>
             </span>
           </Link>
-          <nav className="hidden md:flex space-x-8">
+          <nav className="hidden md:flex space-x-10">
             <NavLink to="/" active={location.pathname === '/'}>Forums</NavLink>
             <NavLink to="/members" active={location.pathname === '/members'}>Members</NavLink>
             <NavLink to="/messages" active={location.pathname === '/messages'}>Chat</NavLink>
@@ -99,56 +77,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         <div className="flex items-center space-x-6">
-          <button 
-            onClick={toggleTheme}
-            className={`p-2 rounded-lg transition-all ${isDark ? 'text-slate-400 hover:text-rojo-400 hover:bg-rojo-900/20' : 'text-slate-400 hover:text-rojo-600 hover:bg-rojo-50'}`}
-          >
+          <button onClick={toggleTheme} className="p-2 text-slate-500 hover:text-rojo-500 transition-colors">
             {isDark ? <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" /></svg> : <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>}
           </button>
           
           {(user.role === 'Admin' || user.role === 'Moderator') && (
-            <Link to="/admin" className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${isDark ? 'bg-rojo-600 text-white' : 'bg-rojo-700 text-white'}`}>Moderation</Link>
+            <Link to="/admin" className="px-4 py-1.5 rounded-full bg-rojo-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-rojo-500 transition-colors shadow-lg shadow-rojo-900/20">Mod Panel</Link>
           )}
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-3 pl-4 border-l border-rojo-900/20">
             <Link to="/profile">
-              <img src={user.avatarUrl} className={`w-9 h-9 rounded-lg border transition-all ${isDark ? 'border-rojo-900' : 'border-slate-100'}`} alt="My Profile" />
+              <img src={user.avatarUrl} className="w-9 h-9 rounded-xl border border-rojo-900/20 hover:scale-105 transition-transform" alt="" />
             </Link>
-            <button 
-              onClick={handleLogout}
-              className={`p-2 rounded-lg text-slate-500 hover:text-rojo-500 transition-colors ${isDark ? 'hover:bg-rojo-900/10' : 'hover:bg-rojo-50'}`}
-              title="Logout"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            <button onClick={handleLogout} className="text-slate-500 hover:text-rojo-500 p-1">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
+      <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-10 flex flex-col lg:flex-row gap-10">
         <main className="flex-1 min-w-0">
           {children}
         </main>
 
-        <aside className="hidden lg:block w-64 space-y-6">
-          <div className={`border rounded-2xl p-6 shadow-xl transition-all ${isDark ? 'bg-[#0e0303] border-rojo-900/40' : 'bg-white border-rojo-100'}`}>
-            <h3 className={`text-xs font-bold uppercase tracking-widest mb-4 ${isDark ? 'text-rojo-500' : 'text-rojo-600'}`}>My Account</h3>
-            <div className="flex items-center space-x-3 mb-6">
-               <img src={user.avatarUrl} className="w-12 h-12 rounded-lg border border-rojo-900/20" alt="" />
+        <aside className="hidden lg:block w-72 space-y-6">
+          <div className={`border rounded-3xl p-8 transition-all ${isDark ? 'bg-black/40 border-rojo-900/30' : 'bg-white border-rojo-100 shadow-sm'}`}>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-rojo-600 mb-6">User Statistics</h3>
+            <div className="flex items-center space-x-4 mb-8">
+               <img src={user.avatarUrl} className="w-14 h-14 rounded-2xl border-2 border-rojo-900/10" alt="" />
                <div className="min-w-0">
-                 <p className="font-bold truncate">{user.displayName}</p>
-                 <p className="text-[10px] text-slate-500 uppercase">@{user.username}</p>
+                 <p className="font-black text-sm truncate">{user.displayName}</p>
+                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">@{user.username}</p>
                </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 border-t border-rojo-900/10 pt-4">
-              <div>
-                <p className="text-xl font-bold">{user.postCount}</p>
-                <p className="text-[10px] text-slate-500 uppercase">Posts</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold">{user.role}</p>
-                <p className="text-[10px] text-slate-500 uppercase">Level</p>
-              </div>
+            <div className="space-y-4">
+              <StatItem label="Forum Posts" value={user.postCount} />
+              <StatItem label="Account Level" value={user.role} />
+              <StatItem label="Joined" value={new Date(user.joinDate).getFullYear().toString()} />
             </div>
           </div>
         </aside>
@@ -156,5 +122,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     </div>
   );
 };
+
+const StatItem = ({ label, value }: { label: string; value: string | number }) => (
+  <div className="flex justify-between items-center py-2 border-b border-rojo-900/5 last:border-0">
+    <span className="text-[10px] font-bold uppercase text-slate-500">{label}</span>
+    <span className="text-xs font-black text-rojo-500">{value}</span>
+  </div>
+);
 
 export default Layout;
