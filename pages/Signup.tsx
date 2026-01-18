@@ -1,21 +1,8 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '../AppStateContext';
 
-const SplatterIcon = () => (
-  <svg className="w-10 h-10 text-rojo-600 mb-2 drop-shadow-[0_0_8px_rgba(255,0,0,0.6)]" viewBox="0 0 100 100" fill="currentColor">
-    <circle cx="50" cy="50" r="20" />
-    <circle cx="35" cy="40" r="12" />
-    <circle cx="65" cy="45" r="10" />
-    <circle cx="55" cy="65" r="14" />
-    <circle cx="40" cy="60" r="8" />
-    <circle cx="25" cy="50" r="6" />
-    <circle cx="75" cy="55" r="7" />
-    <circle cx="45" cy="25" r="5" />
-    <circle cx="60" cy="30" r="6" />
-  </svg>
-);
+const OFFICIAL_LOGO = 'https://cdn.discordapp.com/attachments/857780833967276052/1462268781035257876/8vNx0KgNUIAAAAXV5kBICzjE2Ar5tOA8BqBAAAgCL7afqZ5F3G5QDfkrzfdCAAVnPneDxuPQMAAACwMBsAAAAAUEAAAAAAgAICAAAAABQQAAAAAKCAAAAAAAAFBAAAAAAoIAAAAABAAQEAAAAACggAAAAAUEAAAAAAgAICAAAAABQQAAAAAKCAAAAAAAAFBAAAAAAoIAAAAABAAQEAAAAACvwB3GyoTaCTr1QAAAAASUVORK5CYII.png?ex=696d936d&is=696c41ed&hm=0494b9036feb3cd27412dfdaa7c7145b3093e0a11ae37613e21fb1b644aae6c1&';
 
 const SignupPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -48,12 +35,12 @@ const SignupPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md bg-[#0a0202] border border-rojo-900/50 rounded-2xl p-8 shadow-2xl">
+    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
         <div className="flex flex-col items-center text-center mb-8">
-          <SplatterIcon />
-          <h1 className="text-3xl font-black text-rojo-500 tracking-tight mb-1 uppercase">Register</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Join the RojosGames Community</p>
+          <img src={OFFICIAL_LOGO} className="h-12 w-12 object-contain mb-4" alt="RojoGames Logo" />
+          <h1 className="text-2xl font-black text-white tracking-tight uppercase">Join Community</h1>
+          <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mt-1">Create your profile</p>
         </div>
 
         {success ? (
@@ -62,46 +49,49 @@ const SignupPage: React.FC = () => {
               <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white uppercase mb-2">Account Created</h2>
-              <p className="text-slate-400 text-xs leading-relaxed">Registration successful! Please check your email for a verification link to activate your account.</p>
+              <h2 className="text-lg font-bold text-white uppercase mb-2">Success</h2>
+              <p className="text-zinc-400 text-xs leading-relaxed">Account created! Check your email to activate your profile.</p>
             </div>
-            <Link to="/login" className="block bg-rojo-600 text-white font-bold py-3 rounded-lg shadow-lg uppercase text-[11px] tracking-widest">Return to Login</Link>
+            <Link to="/login" className="block bg-rojo-600 text-white font-bold py-3 rounded-xl shadow-lg uppercase text-[11px] tracking-widest">Proceed to Login</Link>
           </div>
         ) : (
-          <form onSubmit={handleSignup} className="space-y-5">
-            {error && <div className="p-3 bg-rojo-600/10 border border-rojo-500/50 text-rojo-500 text-[11px] font-bold rounded-lg">{error}</div>}
+          <form onSubmit={handleSignup} className="space-y-4">
+            {error && <div className="p-3 bg-rojo-600/10 border border-rojo-600/20 text-rojo-500 text-xs font-bold rounded-lg text-center">{error}</div>}
+            
             <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-widest">Username</label>
+              <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-1.5 tracking-wider">Username</label>
               <input 
                 required
                 type="text" 
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                className="w-full bg-black border border-rojo-900/30 rounded-lg px-4 py-3 text-white focus:ring-1 ring-rojo-500 outline-none transition-all text-sm"
-                placeholder="Forum alias"
+                className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-1 ring-rojo-600 outline-none transition-all text-sm"
+                placeholder="Pick a handle"
                 disabled={loading}
               />
             </div>
+
             <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-widest">Email Address</label>
+              <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-1.5 tracking-wider">Email</label>
               <input 
                 required
                 type="email" 
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full bg-black border border-rojo-900/30 rounded-lg px-4 py-3 text-white focus:ring-1 ring-rojo-500 outline-none transition-all text-sm"
-                placeholder="email@example.com"
+                className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-1 ring-rojo-600 outline-none transition-all text-sm"
+                placeholder="Enter your email"
                 disabled={loading}
               />
             </div>
+
             <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-widest">Password</label>
+              <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-1.5 tracking-wider">Password</label>
               <input 
                 required
                 type="password" 
                 value={pass}
                 onChange={e => setPass(e.target.value)}
-                className="w-full bg-black border border-rojo-900/30 rounded-lg px-4 py-3 text-white focus:ring-1 ring-rojo-500 outline-none transition-all text-sm"
+                className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:ring-1 ring-rojo-600 outline-none transition-all text-sm"
                 placeholder="••••••••"
                 disabled={loading}
               />
@@ -109,16 +99,16 @@ const SignupPage: React.FC = () => {
 
             <button 
               disabled={loading}
-              className="w-full bg-rojo-600 hover:bg-rojo-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all uppercase text-xs tracking-widest disabled:opacity-50"
+              className="w-full bg-rojo-600 hover:bg-rojo-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all uppercase text-xs tracking-widest disabled:opacity-50 mt-2"
             >
-              {loading ? 'Processing...' : 'Create Account'}
+              {loading ? 'Processing...' : 'Register Account'}
             </button>
           </form>
         )}
 
         {!success && (
-          <div className="mt-8 pt-6 border-t border-rojo-900/30 text-center">
-            <p className="text-slate-500 text-[11px]">Already a member? <Link to="/login" className="text-rojo-500 font-bold hover:underline">Log in</Link></p>
+          <div className="mt-8 pt-6 border-t border-zinc-800 text-center">
+            <p className="text-zinc-500 text-xs">Already have an account? <Link to="/login" className="text-rojo-600 font-bold hover:underline">Sign in</Link></p>
           </div>
         )}
       </div>
