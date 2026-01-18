@@ -1,3 +1,4 @@
+
 -- ========================================================
 -- ROJOSGAMES FORUM - ADVANCED MODERATION & PRIVACY SCHEMA
 -- ========================================================
@@ -23,16 +24,17 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     email TEXT,
     is_protected BOOLEAN DEFAULT FALSE,
     notes TEXT DEFAULT '',
+    mod_notes JSONB DEFAULT '[]'::jsonb,
     punishments JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Ensure columns exist if table was already created without them
+-- Ensure all moderation columns exist
 DO $$ 
 BEGIN 
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='notes') THEN
-        ALTER TABLE public.profiles ADD COLUMN notes TEXT DEFAULT '';
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='mod_notes') THEN
+        ALTER TABLE public.profiles ADD COLUMN mod_notes JSONB DEFAULT '[]'::jsonb;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='punishments') THEN
         ALTER TABLE public.profiles ADD COLUMN punishments JSONB DEFAULT '[]'::jsonb;

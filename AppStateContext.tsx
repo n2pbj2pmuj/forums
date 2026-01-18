@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment, ModNote } from './types';
 import { supabase } from './services/supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
 
@@ -45,7 +46,7 @@ interface AppState {
   banUser: (userId: string, reason: string, duration: string, ipBan?: boolean, resetUsername?: boolean) => Promise<void>;
   unbanUser: (userId: string) => Promise<void>;
   warnUser: (userId: string, reason: string) => Promise<void>;
-  updateUserNotes: (userId: string, notes: string) => Promise<void>;
+  updateUserNotes: (userId: string, content: string) => Promise<void>;
   toggleProtectedStatus: (userId: string) => Promise<void>;
   unbanIp: (ip: string) => Promise<void>;
   addManualIpBan: (ip: string, reason: string) => Promise<void>;
@@ -111,7 +112,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     banExpires: data.ban_expires || '',
     lastIp: data.last_ip || null,
     isProtected: data.is_protected || false,
-    notes: data.notes || '',
+    mod_notes: Array.isArray(data.mod_notes) ? data.mod_notes : [],
     punishments: Array.isArray(data.punishments) ? data.punishments : []
   });
 
@@ -129,7 +130,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.banExpires !== undefined) mapping.ban_expires = data.banExpires;
     if (data.lastIp !== undefined) mapping.last_ip = data.lastIp;
     if (data.isProtected !== undefined) mapping.is_protected = data.isProtected;
-    if (data.notes !== undefined) mapping.notes = data.notes;
+    if (data.mod_notes !== undefined) mapping.mod_notes = data.mod_notes;
     if (data.punishments !== undefined) mapping.punishments = data.punishments;
     return mapping;
   };
@@ -186,7 +187,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const u = mapUser(data);
       setCurrentUser(u);
       
-      // ADMIN PRIVACY: Administrators should never have their IPs logged
       if (detectedIp && u.role !== 'Admin') {
         if (data.last_ip !== detectedIp) {
           await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
@@ -198,7 +198,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           path: window.location.pathname
         });
       } else if (u.role === 'Admin') {
-        // Double check admin privacy - wipe history on every load if found
         if (data.last_ip !== null) {
           await supabase.from('profiles').update({ last_ip: null }).eq('id', id);
           await supabase.from('user_ips').delete().eq('user_id', id);
@@ -282,7 +281,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    // If promoted to Admin, wipe IP history immediately
     if (data.role === 'Admin') {
       await supabase.from('user_ips').delete().eq('user_id', userId);
       (data as any).last_ip = null;
@@ -311,38 +309,24 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean, resetUsername?: boolean) => {
     const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toISOString();
-    const updatePayload: any = { 
-      status: 'Banned', 
-      ban_reason: reason, 
-      ban_expires: expires 
-    };
-
+    const updatePayload: any = { status: 'Banned', ban_reason: reason, ban_expires: expires };
     if (resetUsername) {
-      const randomDigits = Math.floor(Math.random() * 900000 + 100000);
-      const resetName = `Username-Reset${randomDigits}`;
+      const resetName = `Username-Reset${Math.floor(Math.random() * 900000)}`;
       updatePayload.username = resetName;
       updatePayload.display_name = resetName;
-      await logPunishment(userId, 'Username Reset', `System Reset: ${reason}`, 'Never');
     }
-
     await logPunishment(userId, 'Ban', reason, expires);
     const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId);
-    
     if (doIpBan) {
       const targetUser = users.find(u => u.id === userId);
-      if (targetUser?.lastIp) {
-        await supabase.from('ip_bans').insert({ ip_address: targetUser.lastIp, reason, banned_by: currentUser?.id });
-      }
+      if (targetUser?.lastIp) await supabase.from('ip_bans').insert({ ip_address: targetUser.lastIp, reason, banned_by: currentUser?.id });
     }
-
-    if (error) alert("Ban failed: " + error.message);
     await syncDatabase();
   };
 
   const unbanUser = async (userId: string) => {
     await logPunishment(userId, 'Unban', 'Administrative Pardon', 'N/A');
-    const { error } = await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
-    if (error) alert("Unban failed: " + error.message);
+    await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
     await syncDatabase();
   };
 
@@ -352,12 +336,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  const updateUserNotes = async (userId: string, notes: string) => {
-    const { error } = await supabase.from('profiles').update({ notes }).eq('id', userId);
-    if (error) {
-      console.error("Failed to save notes", error);
-      alert("Failed to save notes: " + error.message);
-    }
+  const updateUserNotes = async (userId: string, content: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    const newNote: ModNote = {
+      id: Math.random().toString(36).substr(2, 6).toUpperCase(),
+      moderator: currentUser?.username || 'System',
+      content,
+      created_at: new Date().toISOString()
+    };
+    const updatedNotes = [newNote, ...(user.mod_notes || [])];
+    const { error } = await supabase.from('profiles').update({ mod_notes: updatedNotes }).eq('id', userId);
+    if (error) alert("Failed to save note: " + error.message);
     await syncDatabase();
   };
 
@@ -375,9 +365,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addManualIpBan = async (ip: string, reason: string) => {
-    const { error } = await supabase.from('ip_bans').insert({ ip_address: ip, reason, banned_by: currentUser?.id });
+    await supabase.from('ip_bans').insert({ ip_address: ip, reason, banned_by: currentUser?.id });
     if (ip === clientIp) setIsIpBanned(true);
-    if (error) alert("Failed to add IP ban: " + error.message);
     await syncDatabase();
   };
 
@@ -388,21 +377,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addThread = async (title: string, content: string, categoryId: string) => {
     if (!currentUser) return;
-    const { error } = await supabase.from('threads').insert({ author_id: currentUser.id, title, content, category_id: categoryId });
-    if (error) alert("Failed to create thread: " + error.message);
+    await supabase.from('threads').insert({ author_id: currentUser.id, title, content, category_id: categoryId });
     await syncDatabase();
   };
 
   const addPost = async (threadId: string, content: string) => {
     if (!currentUser) return;
-    const { error } = await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    if (error) alert("Failed to reply: " + error.message); 
+    await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
     await syncDatabase();
   };
 
   const updatePost = async (postId: string, content: string) => {
-    const { error } = await supabase.from('posts').update({ content }).eq('id', postId);
-    if (error) alert("Failed to edit post: " + error.message);
+    await supabase.from('posts').update({ content }).eq('id', postId);
     await syncDatabase();
   };
 

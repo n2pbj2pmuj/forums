@@ -22,6 +22,13 @@ export interface Punishment {
   expiration: string;
 }
 
+export interface ModNote {
+  id: string;
+  moderator: string;
+  content: string;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -39,7 +46,8 @@ export interface User {
   banExpires?: string;
   lastIp?: string;
   isProtected?: boolean;
-  notes?: string;
+  notes?: string; // Legacy field
+  mod_notes?: ModNote[]; // Structured field
   punishments?: Punishment[];
 }
 
@@ -86,7 +94,7 @@ export interface Report {
   authorUsername?: string;
   targetUrl?: string;
   reason: string;
-  contentSnippet: string;
+  content_snippet: string;
   status: ModStatus;
   createdAt: string;
 }
