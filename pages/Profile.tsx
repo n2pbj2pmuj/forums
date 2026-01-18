@@ -10,9 +10,7 @@ const ProfilePage: React.FC = () => {
   const { currentUser, users, threads, theme, updateUser } = useAppState();
   const isDark = theme === 'dark';
 
-  // Find user by ID or use current user
   const user = id ? users.find(u => u.id === id) : currentUser;
-  
   const [editing, setEditing] = useState(false);
   const [tempBio, setTempBio] = useState('');
   const [showBannerInput, setShowBannerInput] = useState(false);
@@ -26,15 +24,7 @@ const ProfilePage: React.FC = () => {
     }
   }, [user]);
 
-  if (!user) {
-    return (
-      <Layout>
-        <div className="p-20 text-center text-zinc-500 font-bold uppercase tracking-widest animate-pulse">
-          Searching for User Profile...
-        </div>
-      </Layout>
-    );
-  }
+  if (!user) return <Layout><div className="p-20 text-center text-zinc-500 font-bold uppercase tracking-widest">User Inaccessible</div></Layout>;
 
   const userThreads = threads.filter(t => t.authorId === user.id);
   const isOwnProfile = user.id === currentUser?.id;
@@ -85,12 +75,7 @@ const ProfilePage: React.FC = () => {
           <div className="px-12 pb-12 flex flex-col md:flex-row items-end gap-8 -mt-20 relative z-10">
             <div className="relative group shrink-0">
                <div className="absolute -inset-1 bg-gradient-to-tr from-rojo-600 to-amber-500 rounded-[2.5rem] blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
-               <img 
-                 src={user.avatarUrl || DEFAULT_AVATAR} 
-                 className={`w-40 h-40 rounded-[2.25rem] border-[10px] shadow-2xl relative object-cover ${isDark ? 'border-[#0a0202]' : 'border-white'}`} 
-                 alt="" 
-                 onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; }}
-               />
+               <img src={isBanned ? DEFAULT_AVATAR : user.avatarUrl} className={`w-40 h-40 rounded-[2.25rem] border-[10px] shadow-2xl relative object-cover ${isDark ? 'border-[#0a0202]' : 'border-white'}`} alt="" />
                {!isBanned && <div className="absolute bottom-4 right-4 w-6 h-6 bg-emerald-500 rounded-full border-4 border-[#0a0202]"></div>}
             </div>
             
@@ -131,8 +116,8 @@ const ProfilePage: React.FC = () => {
                   {isBanned ? censorText(user.about || '') : (user.about || "This member hasn't written a bio yet.")}
                 </p>
                 <div className="pt-6 border-t border-zinc-800/50 flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  <span>Joined {new Date(user.joinDate || Date.now()).getFullYear()}</span>
-                  <span className="text-rojo-600">{user.postCount || 0} Posts</span>
+                  <span>Joined {new Date(user.joinDate).getFullYear()}</span>
+                  <span className="text-rojo-600">{user.postCount} Posts</span>
                 </div>
               </div>
             )}
