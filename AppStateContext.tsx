@@ -11,6 +11,12 @@ interface ChatMessage {
   created_at: string;
 }
 
+interface UserIpLog {
+  ip: string;
+  created_at: string;
+  user_agent: string;
+}
+
 interface AppState {
   isAuthenticated: boolean;
   currentUser: User | null;
@@ -51,6 +57,7 @@ interface AppState {
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => Promise<void>;
   sendChatMessage: (receiverId: string, content: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
+  fetchUserIpHistory: (userId: string) => Promise<UserIpLog[]>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
 }
@@ -121,7 +128,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const [threadsRes, usersRes, postsRes, reportsRes, ipBansRes, messagesRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*'),
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true }),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
         supabase.from('ip_bans').select('*'),
@@ -144,7 +151,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (reportsRes.data) setReports(reportsRes.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
           authorUsername: x.author_username, targetUrl: x.target_url,
-          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
       })));
       if (ipBansRes.data) setIpBans(ipBansRes.data);
       
@@ -167,7 +174,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentUser(u);
       if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
       
-      // Update last IP and log visit if authenticated
       if (clientIp) {
         if (data.last_ip !== clientIp) {
           await supabase.from('profiles').update({ last_ip: clientIp }).eq('id', id);
@@ -188,7 +194,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (initRef.current) return;
     initRef.current = true;
     const init = async () => {
-      // 1. Fetch Client IP
       let detectedIp = null;
       try {
         const res = await fetch('https://api.ipify.org?format=json');
@@ -197,7 +202,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setClientIp(detectedIp);
       } catch (e) { console.error("IP Fetch Error:", e); }
 
-      // 2. Check if IP is banned
       if (detectedIp) {
         const { data: bannedIps } = await supabase.from('ip_bans').select('ip_address');
         const isBlocked = bannedIps?.some(b => b.ip_address === detectedIp);
@@ -337,6 +341,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
+  const fetchUserIpHistory = async (userId: string): Promise<UserIpLog[]> => {
+    const { data } = await supabase.from('user_ips').select('ip, created_at, user_agent').eq('user_id', userId).order('created_at', { ascending: false });
+    return (data || []) as UserIpLog[];
+  };
+
   const resolveReport = async (reportId: string, status: ModStatus) => {
     await supabase.from('reports').update({ status }).eq('id', reportId);
     await syncDatabase();
@@ -364,7 +373,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, unbanIp, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned
+      resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned
     }}>
       {children}
     </AppStateContext.Provider>

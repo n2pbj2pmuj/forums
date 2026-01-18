@@ -6,7 +6,7 @@ import Layout from '../components/Layout';
 
 const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'reports' | 'users' | 'ip_bans'>('users');
-  const { reports, users, ipBans, loginAs, resolveReport, banUser, unbanUser, unbanIp, theme, updateTargetUser, clientIp } = useAppState();
+  const { reports, users, ipBans, loginAs, resolveReport, banUser, unbanUser, unbanIp, theme, updateTargetUser, clientIp, fetchUserIpHistory } = useAppState();
   const navigate = useNavigate();
   
   const [showBanModal, setShowBanModal] = useState<string | null>(null);
@@ -18,6 +18,8 @@ const AdminPanel: React.FC = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'User' | 'Moderator' | 'Admin'>('User');
   const [editUsername, setEditUsername] = useState('');
+
+  const [ipHistoryModal, setIpHistoryModal] = useState<{userId: string, username: string, logs: any[]} | null>(null);
 
   const isDark = theme === 'dark';
 
@@ -34,6 +36,11 @@ const AdminPanel: React.FC = () => {
       updateTargetUser(editingUserId, { email: editEmail, role: editRole, username: editUsername });
       setEditingUserId(null);
     }
+  };
+
+  const viewIpHistory = async (user: User) => {
+    const logs = await fetchUserIpHistory(user.id);
+    setIpHistoryModal({ userId: user.id, username: user.username, logs });
   };
 
   return (
@@ -62,10 +69,18 @@ const AdminPanel: React.FC = () => {
                       <div className="min-w-0">
                         <h3 className="font-bold truncate">{user.displayName}</h3>
                         <p className="text-rojo-500 text-xs">@{user.username}</p>
-                        <p className="text-[8px] font-black uppercase tracking-widest text-zinc-600 mt-1">
-                          Last IP: <span className={isIpBanned ? 'text-rojo-600 underline' : 'text-zinc-400'}>{user.lastIp || 'None'}</span>
-                          {isIpBanned && <span className="ml-2 text-rojo-600">[IP BANNED]</span>}
-                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${isIpBanned ? 'bg-rojo-600/20 text-rojo-500 border border-rojo-600/30' : 'bg-zinc-800 text-zinc-400'}`}>
+                             IP: {user.lastIp || 'N/A'}
+                          </span>
+                          <button 
+                            onClick={() => viewIpHistory(user)}
+                            className="text-zinc-500 hover:text-white p-1 rounded transition-colors"
+                            title="View IP History"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -179,17 +194,45 @@ const AdminPanel: React.FC = () => {
         )}
       </div>
 
+      {ipHistoryModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[400] flex items-center justify-center p-6 animate-in fade-in duration-200">
+           <div className={`w-full max-w-2xl rounded-3xl p-8 border shadow-2xl ${isDark ? 'bg-zinc-950 border-rojo-900/30' : 'bg-white border-rojo-100'}`}>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-black uppercase tracking-tighter">IP History: <span className="text-rojo-500">@{ipHistoryModal.username}</span></h2>
+                <button onClick={() => setIpHistoryModal(null)} className="text-zinc-500 hover:text-white">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="max-h-[400px] overflow-y-auto pr-4 space-y-4 no-scrollbar">
+                {ipHistoryModal.logs.map((log, i) => (
+                  <div key={i} className={`p-4 rounded-2xl border flex items-center justify-between ${isDark ? 'bg-black/40 border-rojo-900/10' : 'bg-slate-50 border-slate-100'}`}>
+                    <div>
+                      <p className="text-sm font-black text-rojo-500">{log.ip}</p>
+                      <p className="text-[10px] text-zinc-500 mt-1 truncate max-w-xs">{log.user_agent}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase text-zinc-400">{new Date(log.created_at).toLocaleString()}</p>
+                      {ipBans.some(b => b.ip_address === log.ip) && <span className="text-[8px] text-rojo-500 font-black uppercase tracking-widest block mt-1">Blacklisted</span>}
+                    </div>
+                  </div>
+                ))}
+                {ipHistoryModal.logs.length === 0 && <p className="text-center py-10 opacity-30 text-xs font-bold uppercase tracking-widest">No IP logs found</p>}
+              </div>
+           </div>
+        </div>
+      )}
+
       {editingUserId && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className={`w-full max-w-lg rounded-2xl p-10 border shadow-2xl ${isDark ? 'bg-rojo-950 border-rojo-500/30' : 'bg-white border-slate-200'}`}>
              <h2 className="text-2xl font-black uppercase mb-8 text-rojo-500 tracking-tighter">Edit User Details</h2>
              <div className="space-y-6">
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Username</label>
+                   <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-2">Username</label>
                    <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className={`w-full border rounded-xl p-4 text-sm transition-all outline-none focus:ring-2 ring-rojo-500 ${isDark ? 'bg-black border-rojo-900/50 text-white' : 'bg-slate-50 border-slate-200'}`} />
                 </div>
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Role</label>
+                   <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-2">Role</label>
                    <select value={editRole} onChange={e => setEditRole(e.target.value as any)} className={`w-full border rounded-xl p-4 text-sm transition-all outline-none focus:ring-2 ring-rojo-500 ${isDark ? 'bg-black border-rojo-900/50 text-white' : 'bg-slate-50 border-slate-200'}`}>
                      <option value="User">User</option>
                      <option value="Moderator">Moderator</option>
@@ -198,7 +241,7 @@ const AdminPanel: React.FC = () => {
                 </div>
              </div>
              <div className="mt-10 flex gap-4">
-               <button onClick={() => setEditingUserId(null)} className="flex-1 text-slate-500 font-bold uppercase text-xs tracking-widest py-4">Cancel</button>
+               <button onClick={() => setEditingUserId(null)} className="flex-1 text-zinc-500 font-bold uppercase text-xs tracking-widest py-4">Cancel</button>
                <button onClick={handleRoleUpdate} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-rojo-500/20 hover:bg-rojo-500 transition-all">Update</button>
              </div>
           </div>
@@ -211,12 +254,12 @@ const AdminPanel: React.FC = () => {
              <h2 className="text-2xl font-black uppercase mb-8 text-rojo-500 tracking-tight">Ban User</h2>
              <div className="space-y-6">
                 <div>
-                   <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Ban Reason</label>
+                   <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-2">Ban Reason</label>
                    <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-2xl p-5 text-sm text-white outline-none focus:ring-2 ring-rojo-500 transition-all" rows={4} placeholder="Enter reason..." />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Duration</label>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-2">Duration</label>
                     <select value={banDuration} onChange={e => setBanDuration(e.target.value)} className="w-full bg-black border border-rojo-900/50 rounded-xl p-4 text-sm text-white outline-none focus:ring-2 ring-rojo-500">
                       <option value="1">1 Day</option>
                       <option value="7">7 Days</option>
@@ -224,7 +267,7 @@ const AdminPanel: React.FC = () => {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Security Level</label>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 mb-2">Security Level</label>
                     <label className="flex items-center gap-3 bg-black border border-rojo-900/50 rounded-xl p-4 cursor-pointer hover:border-rojo-600 transition-all group">
                       <input type="checkbox" checked={doIpBan} onChange={e => setDoIpBan(e.target.checked)} className="w-4 h-4 rounded border-zinc-800 text-rojo-600 focus:ring-rojo-600 bg-black" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 group-hover:text-white transition-colors">IP Ban Based</span>
@@ -233,7 +276,7 @@ const AdminPanel: React.FC = () => {
                 </div>
              </div>
              <div className="mt-10 flex gap-4">
-               <button onClick={() => setShowBanModal(null)} className="flex-1 text-slate-500 font-bold uppercase text-xs tracking-widest">Cancel</button>
+               <button onClick={() => setShowBanModal(null)} className="flex-1 text-zinc-500 font-bold uppercase text-xs tracking-widest">Cancel</button>
                <button onClick={handleBan} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest hover:bg-rojo-500 transition-all shadow-xl shadow-rojo-900/20">Apply Ban</button>
              </div>
           </div>
