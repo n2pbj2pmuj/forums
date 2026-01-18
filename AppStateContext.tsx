@@ -183,7 +183,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
+    const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
+    if (error) {
+      console.error("Update Error:", error.message);
+      alert("Failed to update profile: " + error.message);
+      return;
+    }
     await loadProfile(currentUser.id);
     await syncDatabase();
   };
@@ -195,7 +200,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addThread = async (title: string, content: string, categoryId: string) => {
     if (!currentUser) return;
-    await supabase.from('threads').insert({ author_id: currentUser.id, title, content, category_id: categoryId });
+    const { error } = await supabase.from('threads').insert({ author_id: currentUser.id, title, content, category_id: categoryId });
+    if (error) alert("Failed to create thread: " + error.message);
     await syncDatabase();
   };
 
@@ -208,6 +214,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const deleteThread = async (id: string) => { await supabase.from('threads').delete().eq('id', id); await syncDatabase(); };
   const deletePost = async (id: string) => { await supabase.from('posts').delete().eq('id', id); await syncDatabase(); };
+  
   const likePost = async (id: string) => {
     const p = posts.find(x => x.id === id);
     if (!p || !currentUser) return;
@@ -215,6 +222,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await supabase.from('posts').update({ liked_by: newLikedBy, likes: newLikedBy.length }).eq('id', id);
     await syncDatabase();
   };
+
   const likeThread = async (id: string) => {
     const t = threads.find(x => x.id === id);
     if (!t || !currentUser) return;

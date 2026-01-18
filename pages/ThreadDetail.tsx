@@ -61,7 +61,7 @@ const ThreadDetailPage: React.FC = () => {
       setReplyText('');
       setPendingMedia([]);
     } catch (e) {
-      alert("System error. Try again.");
+      console.error("Reply Error:", e);
     } finally { setIsSubmitting(false); }
   };
 
@@ -114,7 +114,7 @@ const ThreadDetailPage: React.FC = () => {
               <div className="flex items-center justify-between pt-10 border-t border-zinc-800/30">
                 <button onClick={() => likeThread(thread.id)} className={`flex items-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all ${isThreadLiked ? 'text-rojo-500' : 'text-zinc-500 hover:text-rojo-600'}`}>
                   <svg className={`w-5 h-5 ${isThreadLiked ? 'fill-current scale-110' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                  {thread.likes} Appreciation
+                  {thread.likes} Likes
                 </button>
                 <button onClick={() => setShowReportModal({type: ReportType.THREAD, targetId: thread.id, author: thread.authorName})} className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-700 hover:text-rojo-600 transition-all">Flag Content</button>
               </div>
@@ -125,7 +125,7 @@ const ThreadDetailPage: React.FC = () => {
         {/* REPLIES AREA */}
         <div className="space-y-6">
           <div className="flex items-center gap-6 px-4">
-             <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-600">{threadPosts.length} FEEDBACKS</h2>
+             <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-600">{threadPosts.length} COMMENTS</h2>
              <div className="h-[2px] flex-1 bg-gradient-to-r from-zinc-800 to-transparent"></div>
           </div>
 
@@ -169,7 +169,7 @@ const ThreadDetailPage: React.FC = () => {
         {currentUser && !thread.isLocked && (
           <div className={`rounded-[2.5rem] p-12 transition-all border shadow-2xl ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-100 shadow-xl'}`}>
             <div className="flex items-center justify-between mb-8">
-               <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">Contribute Feedback</h3>
+               <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">Post a Reply</h3>
                <button onClick={() => fileInputRef.current?.click()} className="text-zinc-600 hover:text-rojo-600 font-black uppercase text-[10px] tracking-widest transition-all">Add Media</button>
                <input type="file" ref={fileInputRef} onChange={(e) => {
                  const file = e.target.files?.[0];
@@ -196,7 +196,7 @@ const ThreadDetailPage: React.FC = () => {
               value={replyText} 
               onChange={e => setReplyText(e.target.value)} 
               className={`w-full h-40 rounded-[1.5rem] p-8 text-sm outline-none mb-8 border transition-all ${isDark ? 'bg-black border-zinc-800 focus:ring-2 ring-rojo-600 text-white shadow-inner' : 'bg-zinc-50 border-zinc-200 focus:ring-2 ring-rojo-600 shadow-inner'}`} 
-              placeholder="System Ready. Type your response..." 
+              placeholder="Type your reply here..." 
             />
             <div className="flex justify-end">
               <button 
@@ -204,7 +204,7 @@ const ThreadDetailPage: React.FC = () => {
                 disabled={isSubmitting || (!replyText.trim() && pendingMedia.length === 0)} 
                 className="bg-rojo-600 text-white px-14 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-rojo-500 shadow-2xl shadow-rojo-950/40 disabled:opacity-20 transition-all transform active:scale-95"
               >
-                {isSubmitting ? 'UPLOADING...' : 'SEND FEEDBACK'}
+                {isSubmitting ? 'UPLOADING...' : 'POST REPLY'}
               </button>
             </div>
           </div>

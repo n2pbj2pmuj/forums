@@ -1,7 +1,7 @@
-
 import { User, ForumCategory, Thread, Post, Report, ReportType, ModStatus, Game, CatalogItem } from './types';
 
-export const DEFAULT_AVATAR = 'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png?ex=696cb789&is=696b6609&hm=0c8df9305778f1c93fcbb819b089c165a1d54676562121955d4ade1b952efa99&';
+export const DEFAULT_AVATAR = 'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png?ex=696d6049&is=696c0ec9&hm=baf622e1557472b08edf9a0ea5afdb7c6bde3d5c855131823ac59478388b1e12&';
+export const ALT_DEFAULT_AVATAR = 'https://cdn.discordapp.com/attachments/857780833967276052/1462277626017091728/defaultpfp2.png?ex=696d9ba9&is=696c4a29&hm=5c9614842b3d25af322b3904394a6dad04cea48cff799dc4fc4bd5f18d857811&';
 
 export const CURRENT_USER: User = {
   id: 'u-admin',
@@ -24,7 +24,7 @@ export const MOCK_USERS: User[] = [
     username: 'Viper', 
     displayName: 'Viper', 
     email: 'viper@rojos.games',
-    avatarUrl: DEFAULT_AVATAR, 
+    avatarUrl: ALT_DEFAULT_AVATAR, 
     role: 'User', 
     status: 'Active', 
     joinDate: '2023-05-10', 

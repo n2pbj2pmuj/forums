@@ -1,8 +1,8 @@
 -- ========================================================
--- ROJOSGAMES FORUM - ULTIMATE IDEMPOTENT SCHEMA
+-- ROJOSGAMES FORUM - STABLE IDEMPOTENT SCHEMA
 -- ========================================================
 
--- 1. BASE TABLES (Preserve Data)
+-- 1. BASE TABLES
 -- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
     content TEXT NOT NULL
 );
 
--- 2. FUNCTIONS (Logic Update)
+-- 2. FUNCTIONS
 -- --------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_updated_at() RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;
@@ -93,12 +93,12 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'username', 'Member_' || substr(NEW.id::text, 1, 5)),
     COALESCE(NEW.raw_user_meta_data->>'username', 'Member_' || substr(NEW.id::text, 1, 5)),
     NEW.email,
-    'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png'
+    'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png?ex=696d6049&is=696c0ec9&hm=baf622e1557472b08edf9a0ea5afdb7c6bde3d5c855131823ac59478388b1e12&'
   ) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
   RETURN NEW;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. TRIGGERS (Safe Creation)
+-- 3. TRIGGERS
 -- --------------------------------------------------------
 DROP TRIGGER IF EXISTS on_profile_updated ON public.profiles;
 CREATE TRIGGER on_profile_updated BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
@@ -106,10 +106,8 @@ CREATE TRIGGER on_profile_updated BEFORE UPDATE ON public.profiles FOR EACH ROW 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 4. POLICIES (Full Idempotency)
+-- 4. POLICIES (Full Reset for Idempotency)
 -- --------------------------------------------------------
-
--- Reset all policies to avoid "already exists" errors
 DO $$
 DECLARE
     pol RECORD;
@@ -120,33 +118,28 @@ BEGIN
     END LOOP;
 END $$;
 
--- Enable RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
--- Profiles
+-- Simplified and working policies
 CREATE POLICY "Profiles select" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- Threads
 CREATE POLICY "Threads select" ON public.threads FOR SELECT USING (true);
 CREATE POLICY "Threads insert" ON public.threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Threads update" ON public.threads FOR UPDATE USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Threads delete" ON public.threads FOR DELETE USING (auth.uid() = author_id OR is_staff(auth.uid()));
 
--- Posts
 CREATE POLICY "Posts select" ON public.posts FOR SELECT USING (true);
 CREATE POLICY "Posts insert" ON public.posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Posts update" ON public.posts FOR UPDATE USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Posts delete" ON public.posts FOR DELETE USING (auth.uid() = author_id OR is_staff(auth.uid()));
 
--- Reports
 CREATE POLICY "Reports insert" ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Reports select" ON public.reports FOR SELECT USING (is_staff(auth.uid()));
 
--- Messages
 CREATE POLICY "Messages select" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 CREATE POLICY "Messages insert" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
