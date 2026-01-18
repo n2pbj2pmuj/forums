@@ -58,14 +58,14 @@ const AdminPanel: React.FC = () => {
     <Layout>
       <div className="space-y-6 animate-in fade-in duration-500">
         <header>
-          <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Moderation Panel</h1>
-          <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-widest mt-1">Global Management & Security Control</p>
+          <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Admin Dashboard</h1>
+          <p className="text-rojo-500 font-bold uppercase text-[10px] tracking-widest mt-1">Management & Security</p>
         </header>
 
         <div className={`flex border-b overflow-x-auto no-scrollbar ${isDark ? 'border-rojo-900/50' : 'border-rojo-100'}`}>
           <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>Users</TabButton>
           <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>Reports</TabButton>
-          <TabButton active={activeTab === 'ip_bans'} onClick={() => setActiveTab('ip_bans')}>Blacklisted IPs</TabButton>
+          <TabButton active={activeTab === 'ip_bans'} onClick={() => setActiveTab('ip_bans')}>Banned IPs</TabButton>
         </div>
 
         {activeTab === 'users' && (
@@ -104,12 +104,12 @@ const AdminPanel: React.FC = () => {
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <button onClick={() => { setEditingUserId(user.id); setEditEmail(user.email); setEditRole(user.role); setEditUsername(user.username); }} className="py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest bg-zinc-900 text-zinc-400 hover:bg-zinc-800 transition-all border border-zinc-800">Permissions</button>
+                    <button onClick={() => { setEditingUserId(user.id); setEditEmail(user.email); setEditRole(user.role); setEditUsername(user.username); }} className="py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest bg-zinc-900 text-zinc-400 hover:bg-zinc-800 transition-all border border-zinc-800">Edit Profile</button>
                     <button onClick={() => { loginAs(user.id); navigate('/'); }} className="bg-zinc-100 text-black font-black uppercase text-[9px] tracking-widest py-2.5 rounded-xl hover:bg-white transition-all shadow-xl shadow-white/5">Impersonate</button>
                     {user.status === 'Banned' ? (
-                      <button onClick={() => unbanUser(user.id)} className="bg-emerald-600 text-white font-black uppercase text-[9px] tracking-widest py-2.5 rounded-xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20">Pardon</button>
+                      <button onClick={() => unbanUser(user.id)} className="bg-emerald-600 text-white font-black uppercase text-[9px] tracking-widest py-2.5 rounded-xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20">Unban</button>
                     ) : (
-                      <button onClick={() => setShowBanModal(user.id)} className="bg-rojo-600 text-white font-black uppercase text-[9px] tracking-widest py-2.5 rounded-xl hover:bg-rojo-500 transition-all shadow-xl shadow-rojo-900/20">Terminate</button>
+                      <button onClick={() => setShowBanModal(user.id)} className="bg-rojo-600 text-white font-black uppercase text-[9px] tracking-widest py-2.5 rounded-xl hover:bg-rojo-500 transition-all shadow-xl shadow-rojo-900/20">Ban User</button>
                     )}
                   </div>
                 </div>
@@ -121,16 +121,16 @@ const AdminPanel: React.FC = () => {
         {activeTab === 'ip_bans' && (
           <div className="space-y-6">
             <div className="flex justify-end">
-              <button onClick={() => setShowManualIpModal(true)} className="bg-rojo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-rojo-900/20 hover:scale-105 transition-all">Blacklist IP</button>
+              <button onClick={() => setShowManualIpModal(true)} className="bg-rojo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-rojo-900/20 hover:scale-105 transition-all">Ban IP Address</button>
             </div>
             
             <div className={`border rounded-[2.5rem] overflow-hidden shadow-2xl transition-all ${isDark ? 'bg-black border-zinc-800' : 'bg-white border-slate-100'}`}>
               <table className="w-full text-left">
                 <thead className={`border-b ${isDark ? 'bg-rojo-950/20 border-zinc-800' : 'bg-slate-50 border-slate-100'}`}>
                   <tr className="text-[10px] uppercase font-black tracking-widest text-zinc-500">
-                    <th className="px-8 py-5">Blacklisted Entity (IP)</th>
-                    <th className="px-8 py-5">Citation</th>
-                    <th className="px-8 py-5">Applied Date</th>
+                    <th className="px-8 py-5">Banned IP</th>
+                    <th className="px-8 py-5">Reason</th>
+                    <th className="px-8 py-5">Banned On</th>
                     <th className="px-8 py-5 text-right">Action</th>
                   </tr>
                 </thead>
@@ -142,13 +142,13 @@ const AdminPanel: React.FC = () => {
                         {ban.ip_address === clientIp && <span className="text-[8px] uppercase text-emerald-500 font-black tracking-[0.3em]">Your Current Network</span>}
                       </td>
                       <td className="px-8 py-5">
-                        <p className={`line-clamp-2 max-w-xs italic text-sm ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>"{ban.reason || 'Security Protocol Violation'}"</p>
+                        <p className={`line-clamp-2 max-w-xs italic text-sm ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>"{ban.reason || 'General Ban'}"</p>
                       </td>
                       <td className="px-8 py-5">
                         <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{new Date(ban.created_at).toLocaleDateString()}</span>
                       </td>
                       <td className="px-8 py-5 text-right">
-                        <button onClick={() => unbanIp(ban.ip_address)} className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-900/20 hover:scale-105 transition-all">Pardon IP</button>
+                        <button onClick={() => unbanIp(ban.ip_address)} className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-900/20 hover:scale-105 transition-all">Unban IP</button>
                       </td>
                     </tr>
                   ))}
@@ -156,7 +156,7 @@ const AdminPanel: React.FC = () => {
               </table>
               {ipBans.length === 0 && (
                 <div className="p-24 text-center opacity-30">
-                  <p className="text-zinc-500 font-black uppercase text-xs tracking-[0.5em]">Network Safe / No Bans</p>
+                  <p className="text-zinc-500 font-black uppercase text-xs tracking-[0.5em]">No active IP bans</p>
                 </div>
               )}
             </div>
@@ -166,7 +166,7 @@ const AdminPanel: React.FC = () => {
         {activeTab === 'reports' && (
            <div className={`border rounded-[2.5rem] overflow-hidden ${isDark ? 'bg-black border-zinc-800' : 'bg-white border-slate-100'}`}>
               <div className="p-20 text-center opacity-30">
-                 <p className="text-zinc-500 font-black uppercase text-xs tracking-[0.5em]">Queue Processing...</p>
+                 <p className="text-zinc-500 font-black uppercase text-xs tracking-[0.5em]">Report Queue Empty</p>
               </div>
            </div>
         )}
@@ -176,20 +176,20 @@ const AdminPanel: React.FC = () => {
       {showManualIpModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[500] flex items-center justify-center p-6 animate-in zoom-in duration-200">
            <div className={`w-full max-w-lg rounded-[3rem] p-12 border bg-[#050101] border-rojo-600/30 shadow-2xl`}>
-              <h2 className="text-3xl font-black uppercase mb-10 text-rojo-600 tracking-tighter">Blacklist IP Address</h2>
+              <h2 className="text-3xl font-black uppercase mb-10 text-rojo-600 tracking-tighter">Ban IP Address</h2>
               <div className="space-y-8">
                 <div>
-                   <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Network Address (IPv4/v6)</label>
+                   <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Network Address</label>
                    <input value={manualIp} onChange={e => setManualIp(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-white text-sm outline-none focus:ring-2 ring-rojo-600" placeholder="0.0.0.0" />
                 </div>
                 <div>
                    <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Ban Reason</label>
-                   <textarea value={manualIpReason} onChange={e => setManualIpReason(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-[1.5rem] p-6 text-sm text-white outline-none focus:ring-2 ring-rojo-600 transition-all" rows={4} placeholder="Citation..." />
+                   <textarea value={manualIpReason} onChange={e => setManualIpReason(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-[1.5rem] p-6 text-sm text-white outline-none focus:ring-2 ring-rojo-600 transition-all" rows={4} placeholder="Reason..." />
                 </div>
               </div>
               <div className="mt-12 flex gap-4">
-                 <button onClick={() => setShowManualIpModal(false)} className="flex-1 text-zinc-600 font-black uppercase text-xs tracking-widest">Abort</button>
-                 <button onClick={handleManualIpBan} className="flex-1 bg-rojo-600 text-white font-black py-5 rounded-[1.5rem] uppercase text-xs tracking-widest hover:bg-rojo-500 transition-all shadow-2xl shadow-rojo-950/40">Blacklist</button>
+                 <button onClick={() => setShowManualIpModal(false)} className="flex-1 text-zinc-600 font-black uppercase text-xs tracking-widest">Cancel</button>
+                 <button onClick={handleManualIpBan} className="flex-1 bg-rojo-600 text-white font-black py-5 rounded-[1.5rem] uppercase text-xs tracking-widest hover:bg-rojo-500 transition-all shadow-2xl shadow-rojo-950/40">Confirm Ban</button>
               </div>
            </div>
         </div>
@@ -200,7 +200,7 @@ const AdminPanel: React.FC = () => {
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[500] flex items-center justify-center p-6 animate-in fade-in duration-200">
            <div className={`w-full max-w-2xl rounded-[3rem] p-10 border shadow-2xl ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-rojo-100'}`}>
               <div className="flex items-center justify-between mb-10">
-                <h2 className="text-2xl font-black uppercase tracking-tighter">Network Logs: <span className="text-rojo-600">@{ipHistoryModal.username}</span></h2>
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Log History: <span className="text-rojo-600">@{ipHistoryModal.username}</span></h2>
                 <button onClick={() => setIpHistoryModal(null)} className="text-zinc-600 hover:text-white transition-colors">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -214,11 +214,11 @@ const AdminPanel: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">{new Date(log.created_at).toLocaleString()}</p>
-                      {ipBans.some(b => b.ip_address === log.ip) && <span className="text-[9px] text-rojo-600 font-black uppercase tracking-[0.3em] block mt-2">BLACK-LISTED</span>}
+                      {ipBans.some(b => b.ip_address === log.ip) && <span className="text-[9px] text-rojo-600 font-black uppercase tracking-[0.3em] block mt-2">BANNED</span>}
                     </div>
                   </div>
                 ))}
-                {ipHistoryModal.logs.length === 0 && <p className="text-center py-20 opacity-20 text-xs font-black uppercase tracking-widest">Secure Profile / No Logs Found</p>}
+                {ipHistoryModal.logs.length === 0 && <p className="text-center py-20 opacity-20 text-xs font-black uppercase tracking-widest">No history logs found</p>}
               </div>
            </div>
         </div>
@@ -228,24 +228,24 @@ const AdminPanel: React.FC = () => {
       {showBanModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[400] flex items-center justify-center p-6 animate-in zoom-in duration-200">
           <div className="w-full max-w-lg rounded-[3rem] p-12 border bg-[#050101] border-rojo-600/30 shadow-2xl">
-             <h2 className="text-3xl font-black uppercase mb-10 text-rojo-600 tracking-tighter">Issue Termination</h2>
+             <h2 className="text-3xl font-black uppercase mb-10 text-rojo-600 tracking-tighter">Ban Account</h2>
              <div className="space-y-8">
                 <div>
-                   <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Reason for Sanction</label>
-                   <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-[1.5rem] p-6 text-sm text-white outline-none focus:ring-2 ring-rojo-600 transition-all" rows={4} placeholder="Citation..." />
+                   <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Ban Reason</label>
+                   <textarea value={banReason} onChange={e => setBanReason(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-[1.5rem] p-6 text-sm text-white outline-none focus:ring-2 ring-rojo-600 transition-all" rows={4} placeholder="Reason..." />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Duration</label>
                     <select value={banDuration} onChange={e => setBanDuration(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-sm text-white outline-none focus:ring-2 ring-rojo-600 font-bold">
-                      <option value="1">24 Hours</option>
+                      <option value="1">1 Day</option>
                       <option value="7">7 Days</option>
                       <option value="30">30 Days</option>
-                      <option value="Permanent">Indefinite (Perm)</option>
+                      <option value="Permanent">Permanent</option>
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Security Override</label>
+                    <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Additional</label>
                     <label className="flex items-center gap-4 bg-zinc-950 border border-zinc-900 rounded-2xl p-4 cursor-pointer hover:border-rojo-600 transition-all group">
                       <input type="checkbox" checked={doIpBan} onChange={e => setDoIpBan(e.target.checked)} className="w-5 h-5 rounded border-zinc-800 text-rojo-600 focus:ring-rojo-600 bg-black" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white transition-colors">Apply IP Ban</span>
@@ -254,8 +254,8 @@ const AdminPanel: React.FC = () => {
                 </div>
              </div>
              <div className="mt-12 flex gap-4">
-               <button onClick={() => setShowBanModal(null)} className="flex-1 text-zinc-600 font-black uppercase text-xs tracking-widest">Abort</button>
-               <button onClick={handleBan} className="flex-1 bg-rojo-600 text-white font-black py-5 rounded-[1.5rem] uppercase text-xs tracking-widest hover:bg-rojo-500 transition-all shadow-2xl shadow-rojo-950/40">Confirm Ban</button>
+               <button onClick={() => setShowBanModal(null)} className="flex-1 text-zinc-600 font-black uppercase text-xs tracking-widest">Cancel</button>
+               <button onClick={handleBan} className="flex-1 bg-rojo-600 text-white font-black py-5 rounded-[1.5rem] uppercase text-xs tracking-widest hover:bg-rojo-500 transition-all shadow-2xl shadow-rojo-950/40">Ban Account</button>
              </div>
           </div>
         </div>
@@ -265,24 +265,24 @@ const AdminPanel: React.FC = () => {
       {editingUserId && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[300] flex items-center justify-center p-6">
            <div className={`w-full max-w-md rounded-[2.5rem] p-10 border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-slate-100'}`}>
-              <h2 className="text-xl font-black uppercase tracking-tighter mb-8 text-rojo-600">Permissions Sync</h2>
+              <h2 className="text-xl font-black uppercase tracking-tighter mb-8 text-rojo-600">Update User</h2>
               <div className="space-y-6">
                  <div>
                     <label className="block text-[10px] font-black uppercase text-zinc-500 mb-2">Username Override</label>
                     <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-xl p-4 text-white text-sm outline-none" />
                  </div>
                  <div>
-                    <label className="block text-[10px] font-black uppercase text-zinc-500 mb-2">Security Clearance (Role)</label>
+                    <label className="block text-[10px] font-black uppercase text-zinc-500 mb-2">User Role</label>
                     <select value={editRole} onChange={e => setEditRole(e.target.value as any)} className="w-full bg-black border border-zinc-800 rounded-xl p-4 text-white text-sm outline-none">
-                       <option value="User">Standard Member</option>
-                       <option value="Moderator">Moderator Access</option>
-                       <option value="Admin">System Administrator</option>
+                       <option value="User">Standard User</option>
+                       <option value="Moderator">Moderator</option>
+                       <option value="Admin">Administrator</option>
                     </select>
                  </div>
               </div>
               <div className="mt-10 flex gap-4">
                  <button onClick={() => setEditingUserId(null)} className="flex-1 text-zinc-600 font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                 <button onClick={handleRoleUpdate} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest">Update Clearances</button>
+                 <button onClick={handleRoleUpdate} className="flex-1 bg-rojo-600 text-white font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest">Save Changes</button>
               </div>
            </div>
         </div>

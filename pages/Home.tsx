@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppState, censorText } from '../AppStateContext';
 import Layout from '../components/Layout';
@@ -6,16 +5,22 @@ import { Link } from 'react-router-dom';
 import { DEFAULT_AVATAR } from '../constants';
 
 const HomePage: React.FC = () => {
-  const { threads, addThread, theme, users, currentUser } = useAppState();
+  const { threads, addThread, theme, users, currentUser, showBannedContent, setShowBannedContent } = useAppState();
   const [showModal, setShowModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredThreads = threads.filter(t => 
-    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.authorName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredThreads = threads.filter(t => {
+    const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         t.authorName.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const author = users.find(u => u.id === t.authorId);
+    const isBanned = author?.status === 'Banned';
+    
+    if (!showBannedContent && isBanned) return false;
+    return matchesSearch;
+  });
 
   const isDark = theme === 'dark';
 
@@ -33,7 +38,19 @@ const HomePage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className={`text-2xl font-black tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>Discussions</h1>
-            <p className="text-zinc-500 text-xs mt-1">Join the conversation with other members.</p>
+            <div className="flex items-center gap-4 mt-1">
+              <p className="text-zinc-500 text-xs">Join the conversation with other members.</p>
+              <div className="flex items-center gap-2 border-l border-zinc-800 pl-4">
+                <input 
+                  type="checkbox" 
+                  id="bannedToggle" 
+                  checked={showBannedContent} 
+                  onChange={(e) => setShowBannedContent(e.target.checked)}
+                  className="w-3 h-3 rounded border-zinc-800 text-rojo-600 focus:ring-0 bg-transparent"
+                />
+                <label htmlFor="bannedToggle" className="text-[9px] font-black uppercase text-zinc-500 cursor-pointer hover:text-rojo-600 transition-colors">Show Banned</label>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <input 

@@ -5,12 +5,15 @@ import { Link } from 'react-router-dom';
 import { DEFAULT_AVATAR } from '../constants';
 
 const MembersPage: React.FC = () => {
-  const { users, theme } = useAppState();
+  const { users, theme, showBannedContent, setShowBannedContent } = useAppState();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const isDark = theme === 'dark';
 
   const filteredUsers = users.filter(u => {
+    const isBanned = u.status === 'Banned';
+    if (!showBannedContent && isBanned) return false;
+
     const matchesSearch = (u.displayName || '').toLowerCase().includes(search.toLowerCase()) || 
                          (u.username || '').toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === 'All' || u.role === roleFilter;
@@ -23,7 +26,19 @@ const MembersPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
           <div>
             <h1 className={`text-5xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>COMMUNITY</h1>
-            <p className="text-rojo-600 font-black uppercase text-[10px] tracking-[0.4em] mt-2">Forum Members Directory</p>
+            <div className="flex items-center gap-4 mt-2">
+              <p className="text-rojo-600 font-black uppercase text-[10px] tracking-[0.4em]">Forum Members Directory</p>
+              <div className="flex items-center gap-2 border-l border-rojo-900/20 pl-4">
+                <input 
+                  type="checkbox" 
+                  id="bannedMemberToggle" 
+                  checked={showBannedContent} 
+                  onChange={(e) => setShowBannedContent(e.target.checked)}
+                  className="w-3 h-3 rounded border-zinc-800 text-rojo-600 focus:ring-0 bg-transparent"
+                />
+                <label htmlFor="bannedMemberToggle" className="text-[9px] font-black uppercase text-zinc-500 cursor-pointer hover:text-rojo-600 transition-colors">Show Banned</label>
+              </div>
+            </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
             <div className="relative flex-1">

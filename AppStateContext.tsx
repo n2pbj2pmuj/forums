@@ -32,6 +32,8 @@ interface AppState {
   loading: boolean;
   clientIp: string | null;
   isIpBanned: boolean;
+  showBannedContent: boolean;
+  setShowBannedContent: (val: boolean) => void;
   login: (email: string, pass: string) => Promise<void>;
   signup: (username: string, email: string, pass: string) => Promise<void>;
   logout: () => void;
@@ -76,6 +78,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [originalAdmin, setOriginalAdmin] = useState<User | null>(null);
   const [clientIp, setClientIp] = useState<string | null>(null);
   const [isIpBanned, setIsIpBanned] = useState(false);
+  const [showBannedContent, setShowBannedContent] = useState(false);
   
   const [users, setUsers] = useState<User[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -370,7 +373,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
       toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned
+      resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned, showBannedContent, setShowBannedContent
     }}>
       {children}
     </AppStateContext.Provider>
