@@ -2,7 +2,7 @@
 -- ROJOSGAMES FORUM - STABLE SCHEMA FIX
 -- ========================================================
 
--- 1. BASE TABLES & COLUMN CHECKS
+-- 1. BASE TABLES
 -- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE TABLE IF NOT EXISTS public.threads (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     author_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS public.threads (
 CREATE TABLE IF NOT EXISTS public.posts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     thread_id UUID REFERENCES public.threads(id) ON DELETE CASCADE NOT NULL,
     author_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     content TEXT NOT NULL,
@@ -47,7 +49,28 @@ CREATE TABLE IF NOT EXISTS public.posts (
     liked_by UUID[] DEFAULT '{}'
 );
 
--- ENSURE MISSING COLUMNS EXIST (Fixes "record new has no field updated_at")
+CREATE TABLE IF NOT EXISTS public.reports (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    type TEXT NOT NULL,
+    target_id UUID NOT NULL,
+    reported_by TEXT NOT NULL, 
+    author_username TEXT,
+    target_url TEXT,
+    reason TEXT NOT NULL,
+    content_snippet TEXT,
+    status TEXT DEFAULT 'PENDING'
+);
+
+CREATE TABLE IF NOT EXISTS public.messages (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    sender_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    receiver_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    content TEXT NOT NULL
+);
+
+-- ENSURE MISSING COLUMNS EXIST
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='updated_at') THEN
@@ -58,9 +81,6 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='updated_at') THEN
         ALTER TABLE public.posts ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='banner_url') THEN
-        ALTER TABLE public.profiles ADD COLUMN banner_url TEXT;
     END IF;
 END $$;
 
@@ -119,9 +139,12 @@ END $$;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
+-- Allow users to update themselves, OR staff (Admins/Mods) to update any profile (for banning/ranking)
 CREATE POLICY "Profiles select" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id OR is_staff(auth.uid()));
 
 CREATE POLICY "Threads select" ON public.threads FOR SELECT USING (true);
 CREATE POLICY "Threads insert" ON public.threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
@@ -132,3 +155,9 @@ CREATE POLICY "Posts select" ON public.posts FOR SELECT USING (true);
 CREATE POLICY "Posts insert" ON public.posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Posts update" ON public.posts FOR UPDATE USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Posts delete" ON public.posts FOR DELETE USING (auth.uid() = author_id OR is_staff(auth.uid()));
+
+CREATE POLICY "Reports insert" ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Reports select" ON public.reports FOR SELECT USING (is_staff(auth.uid()));
+
+CREATE POLICY "Messages select" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Messages insert" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);

@@ -107,10 +107,15 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const syncDatabase = async () => {
     try {
-      const [threadsRes, usersRes, postsRes] = await Promise.all([
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+
+      const [threadsRes, usersRes, postsRes, reportsRes, messagesRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
-        supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true })
+        supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true }),
+        supabase.from('reports').select('*').order('created_at', { ascending: false }),
+        currentUserId ? supabase.from('messages').select('sender_id, receiver_id').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`) : Promise.resolve({ data: [] })
       ]);
 
       if (threadsRes.data) {
@@ -126,7 +131,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           id: x.id, threadId: x.thread_id, authorId: x.author_id, authorName: x.profiles?.username || 'Unknown',
           content: x.content, createdAt: x.created_at, likes: x.likes || 0, likedBy: x.liked_by || []
       })));
-    } catch (e) { console.warn("Sync error"); }
+      if (reportsRes.data) setReports(reportsRes.data.map((x: any) => ({
+          id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
+          authorUsername: x.author_username, targetUrl: x.target_url,
+          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+      })));
+      
+      if (messagesRes.data && currentUserId) {
+        const partners = new Set<string>();
+        messagesRes.data.forEach((m: any) => {
+          if (m.sender_id !== currentUserId) partners.add(m.sender_id);
+          if (m.receiver_id !== currentUserId) partners.add(m.receiver_id);
+        });
+        setAllChatPartners(Array.from(partners));
+      }
+
+    } catch (e) { console.warn("Sync error", e); }
   };
 
   const loadProfile = async (id: string) => {
@@ -188,7 +208,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
+    const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
+    if (error) alert("Failed to update user: " + error.message);
     await syncDatabase();
   };
 
@@ -250,12 +271,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const banUser = async (userId: string, reason: string, duration: string) => {
     const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
-    await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
+    if (error) alert("Ban failed: " + error.message);
     await syncDatabase();
   };
 
   const unbanUser = async (userId: string) => {
-    await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
+    if (error) alert("Unban failed: " + error.message);
     await syncDatabase();
   };
 
