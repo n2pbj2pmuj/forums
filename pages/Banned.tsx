@@ -15,31 +15,40 @@ const BannedPage: React.FC = () => {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
         <div className="bg-rojo-600 p-8 text-white text-center">
-          <h1 className="text-2xl font-black uppercase tracking-tight leading-tight">Account Moderate</h1>
+          <h1 className="text-2xl font-black uppercase tracking-tight">Access Restricted</h1>
+          {isIpBanned && <p className="text-[10px] font-black uppercase tracking-widest mt-2 opacity-80">IP Ban Active</p>}
         </div>
         
         <div className="p-8 space-y-6 text-center">
-          <p className="text-zinc-200 text-base font-bold leading-relaxed">
-            You are forbidden from signing up or logging into accounts.
+          <p className="text-zinc-400 text-sm leading-relaxed">
+            {isIpBanned 
+              ? "Your network access has been blacklisted for severe or repeated violations of our community standards."
+              : "Your account has been moderated due to a violation of our community standards."}
           </p>
 
           <div className="bg-black/40 border border-zinc-800 rounded-xl p-6 text-left space-y-4">
             <div>
-              <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Moderation Notice</p>
+              <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Status Report</p>
               <p className="text-sm italic text-zinc-300">
-                {isIpBanned ? "Network identity has been blacklisted for security violations." : (currentUser?.banReason || 'Your behavior was found in violation of our guidelines.')}
+                {isIpBanned ? "Network identity blacklisted." : (currentUser?.banReason || 'No details provided.')}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-zinc-800 pt-4">
               <div>
-                <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Moderation Type</p>
-                <p className="text-sm font-bold text-rojo-600 uppercase">Suspended</p>
+                <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Type</p>
+                <p className="text-sm font-bold text-rojo-600 uppercase">{isIpBanned ? "IP Ban" : "Account Ban"}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Expiration</p>
-                <p className="text-sm font-bold text-zinc-200">{isIpBanned ? "Indefinite" : (currentUser?.banExpires || 'Permanent')}</p>
+                <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Expires</p>
+                <p className="text-sm font-bold text-zinc-200">{isIpBanned ? "Permanent" : (currentUser?.banExpires || 'Permanent')}</p>
               </div>
             </div>
+            {isIpBanned && clientIp && (
+              <div className="border-t border-zinc-800 pt-4">
+                <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Identifier</p>
+                <p className="text-xs font-mono text-zinc-500">{clientIp}</p>
+              </div>
+            )}
           </div>
 
           <div className="pt-4 space-y-4">
@@ -49,7 +58,7 @@ const BannedPage: React.FC = () => {
             >
               Back to Home
             </button>
-            <p className="text-[10px] text-zinc-600 uppercase font-bold">Please contact platform administration for appeals.</p>
+            <p className="text-[10px] text-zinc-600 uppercase font-bold">Please contact support for appeals.</p>
           </div>
         </div>
       </div>
