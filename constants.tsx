@@ -1,7 +1,7 @@
 import { User, ForumCategory, Thread, Post, Report, ReportType, ModStatus, Game, CatalogItem } from './types';
 
-export const DEFAULT_AVATAR = 'https://tr.rbxcdn.com/38c6ed3cba6211116fbc8263301037f4/420/420/Avatar/Png';
-export const ALT_DEFAULT_AVATAR = 'https://tr.rbxcdn.com/70081079-c70f-48e0-a548-5227e025539d/420/420/Avatar/Png';
+export const DEFAULT_AVATAR = 'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png?ex=696d6049&is=696c0ec9&hm=baf622e1557472b08edf9a0ea5afdb7c6bde3d5c855131823ac59478388b1e12&';
+export const ALT_DEFAULT_AVATAR = DEFAULT_AVATAR;
 
 export const CURRENT_USER: User = {
   id: 'u-admin',

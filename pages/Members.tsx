@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppState } from '../AppStateContext';
 import Layout from '../components/Layout';
@@ -12,8 +11,8 @@ const MembersPage: React.FC = () => {
   const isDark = theme === 'dark';
 
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.displayName.toLowerCase().includes(search.toLowerCase()) || 
-                         u.username.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = (u.displayName || '').toLowerCase().includes(search.toLowerCase()) || 
+                         (u.username || '').toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === 'All' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -33,14 +32,14 @@ const MembersPage: React.FC = () => {
                 placeholder="Search usernames..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className={`w-full pl-14 pr-6 py-4 rounded-3xl text-sm border transition-all outline-none focus:ring-4 ring-rojo-500/10 ${isDark ? 'bg-rojo-950/20 border-rojo-900/30 text-white placeholder-slate-700' : 'bg-white border-rojo-100'}`}
+                className={`w-full pl-14 pr-6 py-4 rounded-3xl text-sm border transition-all outline-none focus:ring-4 ring-rojo-500/10 ${isDark ? 'bg-zinc-900 border-zinc-800 text-white placeholder-slate-700' : 'bg-white border-rojo-100'}`}
               />
               <svg className="w-6 h-6 absolute left-5 top-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </div>
             <select 
               value={roleFilter} 
               onChange={e => setRoleFilter(e.target.value)}
-              className={`px-6 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest border outline-none cursor-pointer ${isDark ? 'bg-rojo-950/20 border-rojo-900/30 text-white' : 'bg-white border-rojo-100'}`}
+              className={`px-6 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest border outline-none cursor-pointer ${isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-rojo-100'}`}
             >
               <option value="All">All Roles</option>
               <option value="Admin">Administrators</option>
@@ -57,7 +56,7 @@ const MembersPage: React.FC = () => {
               <Link 
                 key={user.id} 
                 to={`/profile/${user.id}`}
-                className={`group border rounded-[2.5rem] transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-rojo-900/10 overflow-hidden ${isDark ? 'bg-black/40 border-rojo-900/20' : 'bg-white border-slate-100'}`}
+                className={`group border rounded-[2.5rem] transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-rojo-900/10 overflow-hidden ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-slate-100'}`}
               >
                 <div className="h-24 bg-rojo-950/30 relative">
                   {user.bannerUrl && <img src={user.bannerUrl} className="w-full h-full object-cover opacity-50" alt="" />}
@@ -65,29 +64,34 @@ const MembersPage: React.FC = () => {
                 
                 <div className="px-8 pb-8 flex flex-col items-center -mt-12 text-center">
                   <div className="relative mb-6">
-                    <img src={isBanned ? DEFAULT_AVATAR : user.avatarUrl} className={`w-24 h-24 rounded-[2rem] border-8 shadow-2xl transition-transform group-hover:scale-105 object-cover ${isDark ? 'border-[#080101]' : 'border-white'}`} alt="" />
-                    {!isBanned && <div className="absolute bottom-1 right-1 w-5 h-5 bg-emerald-500 rounded-full border-4 border-[#080101]"></div>}
+                    <img 
+                      src={user.avatarUrl || DEFAULT_AVATAR} 
+                      className={`w-24 h-24 rounded-[2rem] border-8 shadow-2xl transition-transform group-hover:scale-105 object-cover ${isDark ? 'border-[#0a0202]' : 'border-white'}`} 
+                      alt="" 
+                      onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                    />
+                    {!isBanned && <div className="absolute bottom-1 right-1 w-5 h-5 bg-emerald-500 rounded-full border-4 border-[#0a0202]"></div>}
                   </div>
                   
-                  <h3 className={`text-xl font-black tracking-tight truncate w-full ${isBanned ? 'line-through opacity-50' : 'text-rojo-500'}`}>{user.displayName}</h3>
+                  <h3 className={`text-xl font-black tracking-tight truncate w-full ${isBanned ? 'line-through opacity-50' : (isDark ? 'text-white' : 'text-zinc-900')}`}>{user.displayName}</h3>
                   <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-6">@{user.username}</p>
 
                   <div className={`w-full py-2 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] mb-8 border transition-all ${
                     isBanned ? 'bg-rojo-950 border-rojo-900 text-rojo-900' :
                     user.role === 'Admin' ? 'bg-rojo-600 border-rojo-500 text-white' :
                     user.role === 'Moderator' ? 'bg-slate-800 border-slate-700 text-slate-400 group-hover:text-white' :
-                    'bg-slate-900/50 border-rojo-900/10 text-slate-500 group-hover:text-rojo-500 group-hover:border-rojo-500/30'
+                    'bg-slate-900/50 border-zinc-800/50 text-slate-500 group-hover:text-rojo-500 group-hover:border-rojo-500/30'
                   }`}>
                     {isBanned ? 'Banned' : user.role}
                   </div>
 
-                  <div className="grid grid-cols-2 w-full pt-6 border-t border-rojo-900/5">
+                  <div className="grid grid-cols-2 w-full pt-6 border-t border-zinc-800/20">
                     <div>
-                      <p className="text-lg font-black">{user.postCount}</p>
+                      <p className="text-lg font-black">{user.postCount || 0}</p>
                       <p className="text-[9px] uppercase font-black text-slate-500 tracking-widest">Posts</p>
                     </div>
-                    <div className="border-l border-rojo-900/5">
-                      <p className="text-lg font-black">{new Date(user.joinDate).getFullYear()}</p>
+                    <div className="border-l border-zinc-800/20">
+                      <p className="text-lg font-black">{new Date(user.joinDate || Date.now()).getFullYear()}</p>
                       <p className="text-[9px] uppercase font-black text-slate-500 tracking-widest">Joined</p>
                     </div>
                   </div>

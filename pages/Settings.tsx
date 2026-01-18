@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppState } from '../AppStateContext';
 import Layout from '../components/Layout';
@@ -13,8 +12,13 @@ const SettingsPage: React.FC = () => {
 
   const isDark = theme === 'dark';
 
-  const handleSave = () => {
-    updateUser({ displayName, avatarUrl, bannerUrl, about });
+  const handleSave = async () => {
+    // Prevent sending empty strings for URLs if they were previously set
+    const updateData: any = { displayName, about };
+    if (avatarUrl.trim()) updateData.avatarUrl = avatarUrl.trim();
+    if (bannerUrl.trim()) updateData.bannerUrl = bannerUrl.trim();
+    
+    await updateUser(updateData);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

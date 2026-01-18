@@ -11,6 +11,12 @@ interface ChatMessage {
   created_at: string;
 }
 
+interface UserIpLog {
+  ip: string;
+  created_at: string;
+  user_agent: string;
+}
+
 interface AppState {
   isAuthenticated: boolean;
   currentUser: User | null;
@@ -37,6 +43,7 @@ interface AppState {
   banUser: (userId: string, reason: string, duration: string, ipBan?: boolean) => Promise<void>;
   unbanUser: (userId: string) => Promise<void>;
   unbanIp: (ip: string) => Promise<void>;
+  addManualIpBan: (ip: string, reason: string) => Promise<void>;
   addThread: (title: string, content: string, categoryId: string) => Promise<void>;
   incrementThreadView: (threadId: string) => Promise<void>;
   toggleThreadPin: (threadId: string) => Promise<void>;
@@ -51,6 +58,7 @@ interface AppState {
   addReport: (type: ReportType, targetId: string, reason: string, contentSnippet: string, authorUsername: string, targetUrl: string) => Promise<void>;
   sendChatMessage: (receiverId: string, content: string) => Promise<void>;
   fetchChatHistory: (otherUserId: string) => Promise<void>;
+  fetchUserIpHistory: (userId: string) => Promise<UserIpLog[]>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
 }
@@ -85,7 +93,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     username: data.username || 'Member',
     displayName: data.display_name || data.username || 'User',
     email: data.email || '',
-    avatarUrl: data.avatar_url || DEFAULT_AVATAR,
+    avatarUrl: data.avatar_url && data.avatar_url.trim() !== '' ? data.avatar_url : DEFAULT_AVATAR,
     bannerUrl: data.banner_url || '',
     role: data.role || 'User',
     status: (data.status as any) || 'Active',
@@ -98,12 +106,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     lastIp: data.last_ip || null
   });
 
-  const mapToDb = (data: Partial<User>) => {
+  const mapToDb = (data: Partial<User>): any => {
     const mapping: any = {};
     if (data.username !== undefined) mapping.username = data.username;
     if (data.displayName !== undefined) mapping.display_name = data.displayName;
-    if (data.avatarUrl !== undefined) mapping.avatar_url = data.avatarUrl;
-    if (data.bannerUrl !== undefined) mapping.banner_url = data.bannerUrl;
+    if (data.avatarUrl !== undefined && data.avatarUrl !== null) mapping.avatar_url = data.avatarUrl;
+    if (data.bannerUrl !== undefined && data.bannerUrl !== null) mapping.banner_url = data.bannerUrl;
     if (data.role !== undefined) mapping.role = data.role;
     if (data.status !== undefined) mapping.status = data.status;
     if (data.about !== undefined) mapping.about = data.about;
@@ -160,21 +168,19 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (e) { console.warn("Sync error", e); }
   };
 
-  const loadProfile = async (id: string) => {
+  const loadProfile = async (id: string, detectedIp: string | null) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
     if (data) {
       const u = mapUser(data);
       setCurrentUser(u);
-      if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
       
-      // Update last IP and log visit if authenticated
-      if (clientIp) {
-        if (data.last_ip !== clientIp) {
-          await supabase.from('profiles').update({ last_ip: clientIp }).eq('id', id);
+      if (detectedIp) {
+        if (data.last_ip !== detectedIp) {
+          await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
         }
         await supabase.from('user_ips').insert({
           user_id: id,
-          ip: clientIp,
+          ip: detectedIp,
           user_agent: navigator.userAgent,
           path: window.location.pathname
         });
@@ -188,16 +194,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (initRef.current) return;
     initRef.current = true;
     const init = async () => {
-      // 1. Fetch Client IP
       let detectedIp = null;
       try {
         const res = await fetch('https://api.ipify.org?format=json');
         const json = await res.json();
         detectedIp = json.ip;
         setClientIp(detectedIp);
-      } catch (e) { console.error("IP Fetch Error:", e); }
+      } catch (e) { console.warn("IP Detection Failed", e); }
 
-      // 2. Check if IP is banned
       if (detectedIp) {
         const { data: bannedIps } = await supabase.from('ip_bans').select('ip_address');
         const isBlocked = bannedIps?.some(b => b.ip_address === detectedIp);
@@ -206,7 +210,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        await loadProfile(session.user.id);
+        await loadProfile(session.user.id, detectedIp);
         await syncDatabase();
       }
       setLoading(false);
@@ -215,14 +219,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = async (email: string, pass: string) => {
-    if (isIpBanned) throw new Error("This IP address is banned from RojoGames.");
+    if (isIpBanned) throw new Error("This IP address is blacklisted from RojoGames.");
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
-    if (data.user) { await loadProfile(data.user.id); await syncDatabase(); }
+    if (data.user) { await loadProfile(data.user.id, clientIp); await syncDatabase(); }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
-    if (isIpBanned) throw new Error("This IP address is banned from RojoGames.");
+    if (isIpBanned) throw new Error("This IP address is blacklisted from RojoGames.");
     await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
   };
 
@@ -240,19 +244,52 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
     const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', currentUser.id);
-    if (error) {
-      console.error("Update Error:", error.message);
-      alert("Failed to update profile: " + error.message);
-      return;
-    }
-    await loadProfile(currentUser.id);
+    if (error) throw error;
+    await loadProfile(currentUser.id, clientIp);
     await syncDatabase();
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
     const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
-    if (error) alert("Failed to update user: " + error.message);
+    if (error) alert("Update failed: " + error.message);
     await syncDatabase();
+  };
+
+  const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean) => {
+    const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
+    const { error } = await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
+    
+    if (doIpBan) {
+      const targetUser = users.find(u => u.id === userId);
+      if (targetUser?.lastIp) {
+        await supabase.from('ip_bans').insert({ ip_address: targetUser.lastIp, reason, banned_by: currentUser?.id });
+      }
+    }
+
+    if (error) alert("Ban failed: " + error.message);
+    await syncDatabase();
+  };
+
+  const unbanUser = async (userId: string) => {
+    const { error } = await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
+    if (error) alert("Unban failed: " + error.message);
+    await syncDatabase();
+  };
+
+  const unbanIp = async (ip: string) => {
+    await supabase.from('ip_bans').delete().eq('ip_address', ip);
+    await syncDatabase();
+  };
+
+  const addManualIpBan = async (ip: string, reason: string) => {
+    const { error } = await supabase.from('ip_bans').insert({ ip_address: ip, reason, banned_by: currentUser?.id });
+    if (error) alert("Failed to add IP ban: " + error.message);
+    await syncDatabase();
+  };
+
+  const fetchUserIpHistory = async (userId: string): Promise<UserIpLog[]> => {
+    const { data } = await supabase.from('user_ips').select('ip, created_at, user_agent').eq('user_id', userId).order('created_at', { ascending: false });
+    return (data || []) as UserIpLog[];
   };
 
   const addThread = async (title: string, content: string, categoryId: string) => {
@@ -265,10 +302,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addPost = async (threadId: string, content: string) => {
     if (!currentUser) return;
     const { error } = await supabase.from('posts').insert({ thread_id: threadId, author_id: currentUser.id, content });
-    if (error) { 
-      console.error("Post Error Details:", error); 
-      alert("Failed to reply: " + error.message); 
-    }
+    if (error) alert("Failed to reply: " + error.message); 
     await syncDatabase();
   };
 
@@ -280,7 +314,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const deleteThread = async (id: string) => { await supabase.from('threads').delete().eq('id', id); await syncDatabase(); };
   const deletePost = async (id: string) => { await supabase.from('posts').delete().eq('id', id); await syncDatabase(); };
-  
   const likePost = async (id: string) => {
     const p = posts.find(x => x.id === id);
     if (!p || !currentUser) return;
@@ -310,33 +343,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const incrementThreadView = async (id: string) => { await supabase.rpc('increment_thread_view', { t_id: id }); };
-
-  const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean) => {
-    const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
-    const { error } = await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
-    
-    if (doIpBan) {
-      const user = users.find(u => u.id === userId);
-      if (user?.lastIp) {
-        await supabase.from('ip_bans').insert({ ip_address: user.lastIp, reason, banned_by: currentUser?.id });
-      }
-    }
-
-    if (error) alert("Ban failed: " + error.message);
-    await syncDatabase();
-  };
-
-  const unbanUser = async (userId: string) => {
-    const { error } = await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
-    if (error) alert("Unban failed: " + error.message);
-    await syncDatabase();
-  };
-
-  const unbanIp = async (ip: string) => {
-    await supabase.from('ip_bans').delete().eq('ip_address', ip);
-    await syncDatabase();
-  };
-
   const resolveReport = async (reportId: string, status: ModStatus) => {
     await supabase.from('reports').update({ status }).eq('id', reportId);
     await syncDatabase();
@@ -363,8 +369,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, unbanIp, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, unbanIp, addManualIpBan, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
+      resolveReport, addReport, sendChatMessage, fetchChatHistory, fetchUserIpHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned
     }}>
       {children}
     </AppStateContext.Provider>
