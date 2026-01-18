@@ -118,7 +118,7 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'username', 'Member_' || substr(NEW.id::text, 1, 5)),
     COALESCE(NEW.raw_user_meta_data->>'username', 'Member_' || substr(NEW.id::text, 1, 5)),
     NEW.email,
-    'https://cdn.discordapp.com/attachments/857780833967276052/1462032678584057866/defaultpfp.png'
+    'https://tr.rbxcdn.com/38c6ed3cba6211116fbc8263301037f4/420/420/Avatar/Png'
   ) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
   RETURN NEW;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -151,24 +151,4 @@ CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() 
 
 -- IP Bans (Public read so the app can check before login)
 CREATE POLICY "Ip bans select" ON public.ip_bans FOR SELECT USING (true);
-CREATE POLICY "Ip bans staff_modify" ON public.ip_bans FOR ALL USING (is_staff(auth.uid()));
-
--- Visit Logs
-CREATE POLICY "User_ips insert" ON public.user_ips FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "User_ips staff_view" ON public.user_ips FOR SELECT USING (is_staff(auth.uid()) OR auth.uid() = user_id);
-
--- Threads
-CREATE POLICY "Threads select" ON public.threads FOR SELECT USING (true);
-CREATE POLICY "Threads insert" ON public.threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Threads update_delete" ON public.threads FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
-
--- Posts
-CREATE POLICY "Posts select" ON public.posts FOR SELECT USING (true);
-CREATE POLICY "Posts insert" ON public.posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Posts update_delete" ON public.posts FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
-
--- Reports & Messages
-CREATE POLICY "Reports insert" ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Reports select" ON public.reports FOR SELECT USING (is_staff(auth.uid()));
-CREATE POLICY "Messages access" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Messages insert" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Ip bans staff_modify" ON public.ip_bans FOR ALL
