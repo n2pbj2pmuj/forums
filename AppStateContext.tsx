@@ -73,7 +73,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
 
-  // Helper to map DB row or Auth User to our App User interface
   const mapUser = (data: any): User => {
     const email = data.email || '';
     const metadata = data.user_metadata || {};
@@ -101,7 +100,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   };
 
-  // Helper to map App User properties back to Database snake_case columns
   const mapToDb = (data: Partial<User>) => {
     const mapping: any = {};
     if (data.username !== undefined) mapping.username = data.username;
