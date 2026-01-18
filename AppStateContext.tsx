@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment } from './types';
 import { supabase } from './services/supabaseClient';
@@ -187,7 +186,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const u = mapUser(data);
       setCurrentUser(u);
       
-      if (detectedIp) {
+      // ADMIN PRIVACY: Don't log IPs for administrators
+      if (detectedIp && u.role !== 'Admin') {
         if (data.last_ip !== detectedIp) {
           await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
         }
@@ -197,6 +197,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           user_agent: navigator.userAgent,
           path: window.location.pathname
         });
+      } else if (u.role === 'Admin') {
+        // Ensure even the shorthand last_ip is null/cleared for admins
+        if (data.last_ip !== null) {
+          await supabase.from('profiles').update({ last_ip: null }).eq('id', id);
+        }
       }
     }
   };
@@ -276,6 +281,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
+    // If promoted to Admin, wipe IP history immediately
+    if (data.role === 'Admin') {
+      await supabase.from('user_ips').delete().eq('user_id', userId);
+      (data as any).last_ip = null;
+    }
     const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
     if (error) alert("Update failed: " + error.message);
     await syncDatabase();
