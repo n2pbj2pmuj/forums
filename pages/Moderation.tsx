@@ -13,6 +13,7 @@ const AdminPanel: React.FC = () => {
   const [banReason, setBanReason] = useState('Violation of Community Guidelines');
   const [banDuration, setBanDuration] = useState('7');
   const [doIpBan, setDoIpBan] = useState(false);
+  const [resetUsername, setResetUsername] = useState(false);
   
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editEmail, setEditEmail] = useState('');
@@ -28,9 +29,10 @@ const AdminPanel: React.FC = () => {
 
   const handleBan = () => {
     if (showBanModal) {
-      banUser(showBanModal, banReason, banDuration, doIpBan);
+      banUser(showBanModal, banReason, banDuration, doIpBan, resetUsername);
       setShowBanModal(null);
       setDoIpBan(false);
+      setResetUsername(false);
     }
   };
 
@@ -244,11 +246,15 @@ const AdminPanel: React.FC = () => {
                       <option value="Permanent">Permanent</option>
                     </select>
                   </div>
-                  <div className="flex flex-col">
-                    <label className="block text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">Additional</label>
-                    <label className="flex items-center gap-4 bg-zinc-950 border border-zinc-900 rounded-2xl p-4 cursor-pointer hover:border-rojo-600 transition-all group">
+                  <div className="flex flex-col space-y-3">
+                    <label className="block text-[10px] font-black uppercase text-zinc-600 mb-1 tracking-widest">Additional</label>
+                    <label className="flex items-center gap-4 bg-zinc-950 border border-zinc-900 rounded-2xl p-3 cursor-pointer hover:border-rojo-600 transition-all group">
                       <input type="checkbox" checked={doIpBan} onChange={e => setDoIpBan(e.target.checked)} className="w-5 h-5 rounded border-zinc-800 text-rojo-600 focus:ring-rojo-600 bg-black" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white transition-colors">Apply IP Ban</span>
+                    </label>
+                    <label className="flex items-center gap-4 bg-zinc-950 border border-zinc-900 rounded-2xl p-3 cursor-pointer hover:border-rojo-600 transition-all group">
+                      <input type="checkbox" checked={resetUsername} onChange={e => setResetUsername(e.target.checked)} className="w-5 h-5 rounded border-zinc-800 text-rojo-600 focus:ring-rojo-600 bg-black" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white transition-colors">Fully Terminate Username</span>
                     </label>
                   </div>
                 </div>

@@ -42,7 +42,7 @@ interface AppState {
   toggleTheme: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
   updateTargetUser: (userId: string, data: Partial<User>) => Promise<void>; 
-  banUser: (userId: string, reason: string, duration: string, ipBan?: boolean) => Promise<void>;
+  banUser: (userId: string, reason: string, duration: string, ipBan?: boolean, resetUsername?: boolean) => Promise<void>;
   unbanUser: (userId: string) => Promise<void>;
   unbanIp: (ip: string) => Promise<void>;
   addManualIpBan: (ip: string, reason: string) => Promise<void>;
@@ -155,7 +155,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (reportsRes.data) setReports(reportsRes.data.map((x: any) => ({
           id: x.id, type: x.type as ReportType, targetId: x.target_id, reportedBy: x.reported_by,
           authorUsername: x.author_username, targetUrl: x.target_url,
-          reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
+          reason: x.reason, content_snippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
       })));
       if (ipBansRes.data) setIpBans(ipBansRes.data);
       
@@ -258,9 +258,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await syncDatabase();
   };
 
-  const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean) => {
+  const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean, resetUsername?: boolean) => {
     const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
-    const { error } = await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
+    const updatePayload: any = { 
+      status: 'Banned', 
+      ban_reason: reason, 
+      ban_expires: expires 
+    };
+
+    if (resetUsername) {
+      const randomDigits = Math.floor(Math.random() * 900000 + 100000);
+      const resetName = `Username-Reset${randomDigits}`;
+      updatePayload.username = resetName;
+      updatePayload.display_name = resetName;
+    }
+
+    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId);
     
     if (doIpBan) {
       const targetUser = users.find(u => u.id === userId);
