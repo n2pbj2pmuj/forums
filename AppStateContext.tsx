@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './types';
 import { supabase } from './services/supabaseClient';
@@ -74,9 +73,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initRef = useRef(false);
   const isAuthenticated = !!currentUser;
 
+  // Helper to map DB row or Auth User to our App User interface
   const mapUser = (data: any): User => {
     const email = data.email || '';
     const metadata = data.user_metadata || {};
+    
     const username = data.username || metadata.username || 'Member';
     const rawAvatar = data.avatar_url || metadata.avatar_url;
     const isDicebear = rawAvatar?.includes('dicebear.com');
@@ -95,9 +96,26 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       postCount: data.post_count || 0,
       about: data.about || '',
       themePreference: (data.theme_preference as ThemeMode) || 'dark',
-      banReason: data.ban_reason,
-      banExpires: data.ban_expires,
+      banReason: data.ban_reason || data.banReason,
+      banExpires: data.ban_expires || data.banExpires,
     };
+  };
+
+  // Helper to map App User properties back to Database snake_case columns
+  const mapToDb = (data: Partial<User>) => {
+    const mapping: any = {};
+    if (data.username !== undefined) mapping.username = data.username;
+    if (data.displayName !== undefined) mapping.display_name = data.displayName;
+    if (data.avatarUrl !== undefined) mapping.avatar_url = data.avatarUrl;
+    if (data.bannerUrl !== undefined) mapping.banner_url = data.bannerUrl;
+    if (data.role !== undefined) mapping.role = data.role;
+    if (data.status !== undefined) mapping.status = data.status;
+    if (data.about !== undefined) mapping.about = data.about;
+    if (data.themePreference !== undefined) mapping.theme_preference = data.themePreference;
+    if (data.banReason !== undefined) mapping.ban_reason = data.banReason;
+    if (data.banExpires !== undefined) mapping.ban_expires = data.banExpires;
+    if (data.email !== undefined) mapping.email = data.email;
+    return mapping;
   };
 
   const syncDatabase = async () => {
@@ -218,20 +236,23 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUser = async (data: Partial<User>) => {
     if (!currentUser) return;
-    const dbData: any = { ...data };
-    if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
-    if (data.avatarUrl !== undefined) { dbData.avatar_url = data.avatarUrl; delete dbData.avatarUrl; }
-    if (data.bannerUrl !== undefined) { dbData.banner_url = data.bannerUrl; delete dbData.bannerUrl; }
-    await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
+    const dbData = mapToDb(data);
+    const { error } = await supabase.from('profiles').update(dbData).eq('id', currentUser.id);
+    if (error) {
+      console.error("Update failed:", error.message);
+      return;
+    }
     await loadProfile(currentUser.id);
     await syncDatabase();
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    const dbData: any = { ...data };
-    if (data.displayName !== undefined) { dbData.display_name = data.displayName; delete dbData.displayName; }
-    if (data.username !== undefined) { dbData.username = data.username; delete dbData.username; }
-    await supabase.from('profiles').update(dbData).eq('id', userId);
+    const dbData = mapToDb(data);
+    const { error } = await supabase.from('profiles').update(dbData).eq('id', userId);
+    if (error) {
+      console.error("Target update failed:", error.message);
+      return;
+    }
     await syncDatabase();
   };
 

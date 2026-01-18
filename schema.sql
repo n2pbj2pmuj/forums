@@ -1,3 +1,4 @@
+
 -- ========================================================
 -- ROJOSGAMES FORUM - PROFESSIONAL DATABASE SCHEMA
 -- ========================================================
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Ensure banner_url exists (for legacy migrations)
+-- Ensure banner_url exists (idempotent helper for existing tables)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='banner_url') THEN
@@ -102,6 +103,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Clean up existing trigger to avoid "already exists" errors
+DROP TRIGGER IF EXISTS on_profile_updated ON public.profiles;
 CREATE TRIGGER on_profile_updated
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
