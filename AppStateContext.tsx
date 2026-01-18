@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan, Punishment } from './types';
 import { supabase } from './services/supabaseClient';
@@ -187,7 +186,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const u = mapUser(data);
       setCurrentUser(u);
       
-      // ADMIN PRIVACY: Don't log IPs for administrators
+      // ADMIN PRIVACY: Administrators should never have their IPs logged
       if (detectedIp && u.role !== 'Admin') {
         if (data.last_ip !== detectedIp) {
           await supabase.from('profiles').update({ last_ip: detectedIp }).eq('id', id);
@@ -199,7 +198,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           path: window.location.pathname
         });
       } else if (u.role === 'Admin') {
-        // Clear IP history on load if somehow it exists for an admin
+        // Double check admin privacy - wipe history on every load if found
         if (data.last_ip !== null) {
           await supabase.from('profiles').update({ last_ip: null }).eq('id', id);
           await supabase.from('user_ips').delete().eq('user_id', id);
@@ -283,10 +282,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateTargetUser = async (userId: string, data: Partial<User>) => {
-    // If user is promoted to Admin, wipe IP history immediately for privacy
+    // If promoted to Admin, wipe IP history immediately
     if (data.role === 'Admin') {
       await supabase.from('user_ips').delete().eq('user_id', userId);
-      data.lastIp = undefined; // Shorthand for wiping shorthand field
+      (data as any).last_ip = null;
     }
     const { error } = await supabase.from('profiles').update(mapToDb(data)).eq('id', userId);
     if (error) alert("Update failed: " + error.message);
@@ -305,7 +304,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       expiration
     };
     const updatedPunishments = [newPunishment, ...(user.punishments || [])];
-    await supabase.from('profiles').update({ punishments: updatedPunishments }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ punishments: updatedPunishments }).eq('id', userId);
+    if (error) console.error("Punishment log failed", error);
+    await syncDatabase();
   };
 
   const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean, resetUsername?: boolean) => {
@@ -353,7 +354,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateUserNotes = async (userId: string, notes: string) => {
     const { error } = await supabase.from('profiles').update({ notes }).eq('id', userId);
-    if (error) alert("Failed to save notes: " + error.message);
+    if (error) {
+      console.error("Failed to save notes", error);
+      alert("Failed to save notes: " + error.message);
+    }
     await syncDatabase();
   };
 

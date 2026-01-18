@@ -28,6 +28,20 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- Ensure columns exist if table was already created without them
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='notes') THEN
+        ALTER TABLE public.profiles ADD COLUMN notes TEXT DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='punishments') THEN
+        ALTER TABLE public.profiles ADD COLUMN punishments JSONB DEFAULT '[]'::jsonb;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='is_protected') THEN
+        ALTER TABLE public.profiles ADD COLUMN is_protected BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.ip_bans (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     ip_address TEXT UNIQUE NOT NULL,
@@ -96,18 +110,14 @@ CREATE TABLE IF NOT EXISTS public.messages (
 -- 2. FUNCTIONS & TRIGGERS
 -- --------------------------------------------------------
 
--- Staff check function used in RLS policies
 CREATE OR REPLACE FUNCTION public.is_staff(u_id UUID) RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = u_id AND (role = 'Admin' OR role = 'Moderator'));
 $$ LANGUAGE sql SECURITY DEFINER;
 
--- RPC for incrementing thread views safely
 CREATE OR REPLACE FUNCTION public.increment_thread_view(t_id UUID)
 RETURNS VOID AS $$
 BEGIN
-    UPDATE public.threads
-    SET view_count = view_count + 1
-    WHERE id = t_id;
+    UPDATE public.threads SET view_count = view_count + 1 WHERE id = t_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -115,7 +125,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.handle_admin_privacy() 
 RETURNS TRIGGER AS $$
 BEGIN
-    -- If user is an Admin, delete IP logs and wipe shorthand IP
     IF NEW.role = 'Admin' THEN
         DELETE FROM public.user_ips WHERE user_id = NEW.id;
         NEW.last_ip := NULL;
@@ -123,14 +132,12 @@ BEGIN
     RETURN NEW;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Handle updated_at timestamps
 CREATE OR REPLACE FUNCTION public.handle_updated_at() RETURNS TRIGGER AS $$
 BEGIN 
   NEW.updated_at = NOW(); 
   RETURN NEW; 
 END; $$ LANGUAGE plpgsql;
 
--- New user initialization from Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.profiles (id, username, display_name, email, avatar_url)
@@ -144,7 +151,6 @@ BEGIN
   RETURN NEW;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Applying Triggers
 DROP TRIGGER IF EXISTS on_profile_updated ON public.profiles;
 CREATE TRIGGER on_profile_updated BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 
@@ -173,23 +179,17 @@ END $$;
 
 CREATE POLICY "Profiles select" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id OR is_staff(auth.uid()));
-
 CREATE POLICY "Ip bans select" ON public.ip_bans FOR SELECT USING (true);
 CREATE POLICY "Ip bans modify" ON public.ip_bans FOR ALL USING (is_staff(auth.uid()));
-
 CREATE POLICY "User_ips insert" ON public.user_ips FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "User_ips view" ON public.user_ips FOR SELECT USING (auth.uid() = user_id OR is_staff(auth.uid()));
-
 CREATE POLICY "Threads select" ON public.threads FOR SELECT USING (true);
 CREATE POLICY "Threads mod" ON public.threads FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Threads insert" ON public.threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
 CREATE POLICY "Posts select" ON public.posts FOR SELECT USING (true);
 CREATE POLICY "Posts mod" ON public.posts FOR ALL USING (auth.uid() = author_id OR is_staff(auth.uid()));
 CREATE POLICY "Posts insert" ON public.posts FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
 CREATE POLICY "Reports insert" ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Reports select" ON public.reports FOR SELECT USING (is_staff(auth.uid()));
-
 CREATE POLICY "Messages access" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 CREATE POLICY "Messages insert" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
