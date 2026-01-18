@@ -19,8 +19,11 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     theme_preference TEXT DEFAULT 'dark',
     ban_reason TEXT,
     ban_expires TEXT,
-    last_ip TEXT, -- Convenient shorthand for last known IP
+    last_ip TEXT, 
     email TEXT,
+    is_protected BOOLEAN DEFAULT FALSE,
+    notes TEXT DEFAULT '',
+    punishments JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
