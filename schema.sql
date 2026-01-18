@@ -1,5 +1,5 @@
 -- ========================================================
--- ROJOSGAMES FORUM - STABLE SCHEMA FIX
+-- ROJOSGAMES FORUM - IP TRACKING & BAN SCHEMA
 -- ========================================================
 
 -- 1. BASE TABLES
@@ -17,9 +17,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     theme_preference TEXT DEFAULT 'dark',
     ban_reason TEXT,
     ban_expires TEXT,
+    last_ip TEXT, -- Added for IP tracking
     email TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.ip_bans (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ip_address TEXT UNIQUE NOT NULL,
+    reason TEXT,
+    banned_by UUID REFERENCES public.profiles(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.threads (
@@ -73,18 +82,12 @@ CREATE TABLE IF NOT EXISTS public.messages (
 -- ENSURE MISSING COLUMNS EXIST
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='updated_at') THEN
-        ALTER TABLE public.profiles ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='threads' AND column_name='updated_at') THEN
-        ALTER TABLE public.threads ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='updated_at') THEN
-        ALTER TABLE public.posts ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='last_ip') THEN
+        ALTER TABLE public.profiles ADD COLUMN last_ip TEXT;
     END IF;
 END $$;
 
--- 2. FUNCTIONS (Clean Drop to fix "cannot change name of input parameter")
+-- 2. FUNCTIONS
 -- --------------------------------------------------------
 DROP FUNCTION IF EXISTS public.is_staff(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION public.is_staff(u_id UUID) RETURNS BOOLEAN AS $$
@@ -124,7 +127,7 @@ CREATE TRIGGER on_post_updated BEFORE UPDATE ON public.posts FOR EACH ROW EXECUT
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 4. POLICIES (Full Reset)
+-- 4. POLICIES
 -- --------------------------------------------------------
 DO $$
 DECLARE
@@ -141,10 +144,14 @@ ALTER TABLE public.threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ip_bans ENABLE ROW LEVEL SECURITY;
 
--- Allow users to update themselves, OR staff (Admins/Mods) to update any profile (for banning/ranking)
 CREATE POLICY "Profiles select" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id OR is_staff(auth.uid()));
+
+CREATE POLICY "Ip bans select" ON public.ip_bans FOR SELECT USING (true);
+CREATE POLICY "Ip bans insert" ON public.ip_bans FOR INSERT WITH CHECK (is_staff(auth.uid()));
+CREATE POLICY "Ip bans delete" ON public.ip_bans FOR DELETE USING (is_staff(auth.uid()));
 
 CREATE POLICY "Threads select" ON public.threads FOR SELECT USING (true);
 CREATE POLICY "Threads insert" ON public.threads FOR INSERT WITH CHECK (auth.role() = 'authenticated');

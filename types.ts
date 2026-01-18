@@ -1,4 +1,3 @@
-
 export enum ModStatus {
   PENDING = 'PENDING',
   RESOLVED = 'RESOLVED',
@@ -28,6 +27,7 @@ export interface User {
   themePreference: ThemeMode;
   banReason?: string;
   banExpires?: string;
+  lastIp?: string;
 }
 
 export interface ForumCategory {
@@ -78,7 +78,6 @@ export interface Report {
   createdAt: string;
 }
 
-// Fixed missing Game interface for Games.tsx and Details.tsx
 export interface Game {
   id: string;
   title: string;
@@ -90,7 +89,6 @@ export interface Game {
   description: string;
 }
 
-// Fixed missing CatalogItem interface for Catalog.tsx and Details.tsx
 export interface CatalogItem {
   id: string;
   name: string;
@@ -100,4 +98,11 @@ export interface CatalogItem {
   creatorName: string;
   price: number;
   description: string;
+}
+
+export interface IpBan {
+  id: string;
+  ip_address: string;
+  reason: string;
+  created_at: string;
 }

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppStateProvider, useAppState } from './AppStateContext';
@@ -28,7 +27,7 @@ const GlobalAuthHandler: React.FC = () => {
 };
 
 const ProtectedRoutes: React.FC = () => {
-  const { currentUser, isAuthenticated, loading } = useAppState();
+  const { currentUser, isAuthenticated, loading, isIpBanned } = useAppState();
   const location = useLocation();
 
   if (loading) {
@@ -40,6 +39,11 @@ const ProtectedRoutes: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  // Mandatory IP Ban Check
+  if (isIpBanned && location.pathname !== '/banned') {
+    return <Navigate to="/banned" replace />;
   }
 
   const isExempt = ['/login', '/signup', '/forgot-password', '/update-password'].includes(location.pathname);
@@ -54,7 +58,7 @@ const ProtectedRoutes: React.FC = () => {
   }
 
   // Redirect active users AWAY from the ban page
-  if (currentUser?.status !== 'Banned' && location.pathname === '/banned') {
+  if (!isIpBanned && currentUser?.status !== 'Banned' && location.pathname === '/banned') {
     return <Navigate to="/" replace />;
   }
 

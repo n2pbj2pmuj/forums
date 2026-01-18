@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode } from './types';
+import { User, Thread, Post, Report, ModStatus, ReportType, ThemeMode, IpBan } from './types';
 import { supabase } from './services/supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
 
@@ -19,10 +19,13 @@ interface AppState {
   threads: Thread[];
   posts: Post[];
   reports: Report[];
+  ipBans: IpBan[];
   chatMessages: ChatMessage[];
   allChatPartners: string[];
   theme: ThemeMode;
   loading: boolean;
+  clientIp: string | null;
+  isIpBanned: boolean;
   login: (email: string, pass: string) => Promise<void>;
   signup: (username: string, email: string, pass: string) => Promise<void>;
   logout: () => void;
@@ -31,8 +34,9 @@ interface AppState {
   toggleTheme: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
   updateTargetUser: (userId: string, data: Partial<User>) => Promise<void>; 
-  banUser: (userId: string, reason: string, duration: string) => Promise<void>;
+  banUser: (userId: string, reason: string, duration: string, ipBan?: boolean) => Promise<void>;
   unbanUser: (userId: string) => Promise<void>;
+  unbanIp: (ip: string) => Promise<void>;
   addThread: (title: string, content: string, categoryId: string) => Promise<void>;
   incrementThreadView: (threadId: string) => Promise<void>;
   toggleThreadPin: (threadId: string) => Promise<void>;
@@ -62,11 +66,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [originalAdmin, setOriginalAdmin] = useState<User | null>(null);
+  const [clientIp, setClientIp] = useState<string | null>(null);
+  const [isIpBanned, setIsIpBanned] = useState(false);
   
   const [users, setUsers] = useState<User[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [ipBans, setIpBans] = useState<IpBan[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [allChatPartners, setAllChatPartners] = useState<string[]>([]);
 
@@ -88,6 +95,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     themePreference: (data.theme_preference as ThemeMode) || 'dark',
     banReason: data.ban_reason || '',
     banExpires: data.ban_expires || '',
+    lastIp: data.last_ip || null
   });
 
   const mapToDb = (data: Partial<User>) => {
@@ -102,6 +110,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.themePreference !== undefined) mapping.theme_preference = data.themePreference;
     if (data.banReason !== undefined) mapping.ban_reason = data.banReason;
     if (data.banExpires !== undefined) mapping.ban_expires = data.banExpires;
+    if (data.lastIp !== undefined) mapping.last_ip = data.lastIp;
     return mapping;
   };
 
@@ -110,11 +119,12 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id;
 
-      const [threadsRes, usersRes, postsRes, reportsRes, messagesRes] = await Promise.all([
+      const [threadsRes, usersRes, postsRes, reportsRes, ipBansRes, messagesRes] = await Promise.all([
         supabase.from('threads').select('*, profiles(username, display_name, status, role)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('posts').select('*, profiles(username, display_name, status, role)').order('created_at', { ascending: true }),
         supabase.from('reports').select('*').order('created_at', { ascending: false }),
+        supabase.from('ip_bans').select('*'),
         currentUserId ? supabase.from('messages').select('sender_id, receiver_id').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`) : Promise.resolve({ data: [] })
       ]);
 
@@ -136,6 +146,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           authorUsername: x.author_username, targetUrl: x.target_url,
           reason: x.reason, contentSnippet: x.content_snippet, status: x.status as ModStatus, createdAt: x.created_at
       })));
+      if (ipBansRes.data) setIpBans(ipBansRes.data);
       
       if (messagesRes.data && currentUserId) {
         const partners = new Set<string>();
@@ -155,6 +166,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const u = mapUser(data);
       setCurrentUser(u);
       if (originalAdmin && originalAdmin.id === u.id) setOriginalAdmin(u);
+      
+      // Update last IP if authenticated
+      if (clientIp && data.last_ip !== clientIp) {
+        await supabase.from('profiles').update({ last_ip: clientIp }).eq('id', id);
+      }
     }
   };
 
@@ -164,6 +180,22 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (initRef.current) return;
     initRef.current = true;
     const init = async () => {
+      // 1. Fetch Client IP
+      let detectedIp = null;
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const json = await res.json();
+        detectedIp = json.ip;
+        setClientIp(detectedIp);
+      } catch (e) { console.error("IP Fetch Error:", e); }
+
+      // 2. Check if IP is banned
+      if (detectedIp) {
+        const { data: bannedIps } = await supabase.from('ip_bans').select('ip_address');
+        const isBlocked = bannedIps?.some(b => b.ip_address === detectedIp);
+        setIsIpBanned(!!isBlocked);
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await loadProfile(session.user.id);
@@ -175,12 +207,14 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = async (email: string, pass: string) => {
+    if (isIpBanned) throw new Error("This IP address is banned from RojoGames.");
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     if (data.user) { await loadProfile(data.user.id); await syncDatabase(); }
   };
 
   const signup = async (username: string, email: string, pass: string) => {
+    if (isIpBanned) throw new Error("This IP address is banned from RojoGames.");
     await supabase.auth.signUp({ email, password: pass, options: { data: { username } } });
   };
 
@@ -269,9 +303,17 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const incrementThreadView = async (id: string) => { await supabase.rpc('increment_thread_view', { t_id: id }); };
 
-  const banUser = async (userId: string, reason: string, duration: string) => {
+  const banUser = async (userId: string, reason: string, duration: string, doIpBan?: boolean) => {
     const expires = duration === 'Permanent' ? 'Never' : new Date(Date.now() + parseInt(duration) * 86400000).toLocaleString();
     const { error } = await supabase.from('profiles').update({ status: 'Banned', ban_reason: reason, ban_expires: expires }).eq('id', userId);
+    
+    if (doIpBan) {
+      const user = users.find(u => u.id === userId);
+      if (user?.lastIp) {
+        await supabase.from('ip_bans').insert({ ip_address: user.lastIp, reason, banned_by: currentUser?.id });
+      }
+    }
+
     if (error) alert("Ban failed: " + error.message);
     await syncDatabase();
   };
@@ -279,6 +321,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const unbanUser = async (userId: string) => {
     const { error } = await supabase.from('profiles').update({ status: 'Active', ban_reason: null, ban_expires: null }).eq('id', userId);
     if (error) alert("Unban failed: " + error.message);
+    await syncDatabase();
+  };
+
+  const unbanIp = async (ip: string) => {
+    await supabase.from('ip_bans').delete().eq('ip_address', ip);
     await syncDatabase();
   };
 
@@ -308,8 +355,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <AppStateContext.Provider value={{
       isAuthenticated, login, signup, logout, loginAs, revertToAdmin, originalAdmin, currentUser, users, threads, posts, reports, chatMessages, allChatPartners, theme, loading,
-      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
-      resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword
+      toggleTheme, updateUser, updateTargetUser, banUser, unbanUser, unbanIp, addThread, incrementThreadView, toggleThreadPin, toggleThreadLock, deleteThread, addPost, updatePost, deletePost, likePost, likeThread,
+      resolveReport, addReport, sendChatMessage, fetchChatHistory, resetPassword, updatePassword, ipBans, clientIp, isIpBanned
     }}>
       {children}
     </AppStateContext.Provider>
