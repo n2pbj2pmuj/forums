@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppStateProvider, useAppState } from './AppStateContext';
@@ -59,6 +60,12 @@ const ProtectedRoutes: React.FC = () => {
 
   // Redirect active users AWAY from the ban page
   if (!isIpBanned && currentUser?.status !== 'Banned' && location.pathname === '/banned') {
+    return <Navigate to="/" replace />;
+  }
+
+  // Admin Panel Protection Logic
+  const isStaff = currentUser?.role === 'Admin' || currentUser?.role === 'Moderator';
+  if (location.pathname === '/admin' && !isStaff) {
     return <Navigate to="/" replace />;
   }
 
